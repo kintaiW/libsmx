@@ -157,6 +157,48 @@ For `no_std` without `alloc`:
 libsmx = { version = "0.3", default-features = false }
 ```
 
+## Benchmarks
+
+Measured on Linux x86_64 (single core). All operations are constant-time.
+
+### Throughput
+
+| Algorithm | Data Size | Time | Throughput |
+|-----------|-----------|------|------------|
+| SM3 hash | 64 B | 349 ns | — |
+| SM3 hash | 1 KiB | 2.80 µs | — |
+| SM3 hash | 64 KiB | 167 µs | **374 MiB/s** |
+| SM4-ECB encrypt | 16 B | 1.14 µs | — |
+| SM4-ECB encrypt | 1 KiB | 37.0 µs | — |
+| SM4-ECB encrypt | 64 KiB | 2.32 ms | **27 MiB/s** |
+
+### SM2 (256-bit ECC)
+
+| Operation | Time |
+|-----------|------|
+| Key generation | 221 µs |
+| Sign | 258 µs |
+| Verify | 316 µs |
+| Encrypt | 639 µs |
+| Decrypt | 417 µs |
+
+### SM9 (BN256 pairing-based)
+
+| Operation | Time |
+|-----------|------|
+| Master keygen | 753 µs |
+| User keygen | 324 µs |
+| Sign | 3.44 ms |
+| Verify | 5.50 ms |
+| Encrypt | 4.68 ms |
+| Decrypt | 1.54 ms |
+
+Run benchmarks locally:
+
+```bash
+cargo bench
+```
+
 ## Security
 
 - All secret-dependent operations are constant-time (fixed iteration counts, mask-based selection)

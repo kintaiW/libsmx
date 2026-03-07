@@ -32,6 +32,11 @@
 - 库级别强制 `#![forbid(unsafe_code)]`
 - 通过 `zeroize::ZeroizeOnDrop` 自动清零私钥
 - 所有算法的 GB/T 标准测试向量
+- 所有算法的 Criterion 基准测试及性能基线数据：
+  - SM3：374 MiB/s 吞吐量（64 KiB）
+  - SM4-ECB：27 MiB/s 吞吐量（64 KiB）
+  - SM2 签名：258 µs，验签：316 µs
+  - SM9 签名：3.44 ms，验签：5.50 ms
 
 ### 安全
 

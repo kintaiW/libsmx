@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `#![forbid(unsafe_code)]` enforced at crate level
 - Automatic private key zeroization via `zeroize::ZeroizeOnDrop`
 - GB/T standard test vectors for all algorithms
+- Criterion benchmarks for all algorithms with baseline performance data:
+  - SM3: 374 MiB/s throughput (64 KiB)
+  - SM4-ECB: 27 MiB/s throughput (64 KiB)
+  - SM2 sign: 258 µs, verify: 316 µs
+  - SM9 sign: 3.44 ms, verify: 5.50 ms
 
 ### Security
 
