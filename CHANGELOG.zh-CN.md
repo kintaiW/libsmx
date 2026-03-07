@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.1.1] - 2025-03-07
+
+### 修复
+
+- 修复 `cargo test --no-default-features --lib` 编译错误
+  - SM3 测试：移除 alloc 依赖，改用手动十六进制解析
+  - SM4 modes 测试：添加 `#[cfg(feature = "alloc")]`
+
+### 变更
+
+- MSRV 提升至 1.83.0（crypto-bigint 0.6.x 的 ConstMontyForm 常量时间 Montgomery 算术所需）
+- 使用 Rust 1.83+ 内置 `div_ceil` 方法替代手动实现
+
+### CI
+
+- 优化 sanity_check.sh 跳过测试代码，避免误报
+
 ## [0.1.0] - 2025-03-07
 
 ### 新增
@@ -53,4 +70,5 @@
 - XTS：拒绝非 16 字节对齐输入，而非静默截断
 - SM9 `hash_to_range`：用常量时间条件选择替换可变迭代 `while` 循环
 
+[0.1.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.0

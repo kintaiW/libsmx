@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-03-07
+
+### Fixed
+
+- Fixed `cargo test --no-default-features --lib` compilation error
+  - SM3 tests: removed alloc dependency, use manual hex parsing
+  - SM4 modes tests: added `#[cfg(feature = "alloc")]`
+
+### Changed
+
+- MSRV raised to 1.83.0 (required by crypto-bigint 0.6.x for ConstMontyForm constant-time Montgomery arithmetic)
+- Use Rust 1.83+ built-in `div_ceil` method instead of manual implementation
+
+### CI
+
+- Optimized sanity_check.sh to skip test code, avoiding false positives
+
 ## [0.1.0] - 2025-03-07
 
 ### Added
@@ -53,4 +70,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - XTS: reject non-16-byte-aligned input instead of silently truncating
 - SM9 `hash_to_range`: replaced variable-iteration `while` loop with constant-time conditional select
 
+[0.1.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.0
