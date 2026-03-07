@@ -158,7 +158,7 @@ pub fn generate_sign_master_keypair<R: RngCore>(rng: &mut R) -> (Sm9MasterPrivKe
 /// GB/T 38635.2-2020 §6.1：
 ///   t1 = H1(ID||hid, N) + ks
 ///   t2 = ks · t1^{-1} mod N（注意：不是 t1^{-1}·P1，而是 ks·t1^{-1}·P1）
-///   dA = [t2]P1
+///   dA = \[t2\]P1
 /// hid = 0x01（签名）
 pub fn generate_sign_user_key(
     master_priv: &Sm9MasterPrivKey,
@@ -218,7 +218,7 @@ pub fn generate_enc_master_keypair<R: RngCore>(rng: &mut R) -> (Sm9MasterPrivKey
 /// GB/T 38635.1-2020 §6.1（加密密钥派生）：
 ///   t1 = H1(ID||hid, N) + ke
 ///   t2 = ke · t1^{-1} mod N
-///   de = [t2]P1
+///   de = \[t2\]P1
 pub fn generate_enc_user_key(
     master_priv: &Sm9MasterPrivKey,
     id: &[u8],
@@ -576,7 +576,7 @@ mod tests {
     #[test]
     fn test_generate_sign_master_keypair() {
         let mut rng = FakeRng([0x42u8; 32]);
-        let (ks, ppub) = generate_sign_master_keypair(&mut rng);
+        let (_ks, ppub) = generate_sign_master_keypair(&mut rng);
         // 验证 ppub 在 G2 上
         let p = G2Affine::from_bytes(ppub.as_bytes()).expect("公钥应有效");
         assert!(p.is_on_curve());
@@ -607,7 +607,7 @@ mod tests {
 
     #[test]
     fn test_pairing_bilinear() {
-        use crate::sm9::fields::fp12::{fp12_mul, Fp12};
+        use crate::sm9::fields::fp12::fp12_mul;
         use crate::sm9::groups::g1::{G1Affine, G1Jacobian};
         use crate::sm9::groups::g2::{G2Affine, G2Jacobian};
         use crate::sm9::pairing::pairing;
@@ -617,24 +617,33 @@ mod tests {
         let q = G2Affine::generator();
 
         // 验证 G1 scalar_mul(2) == G1.double()
-        let g1_2_by_mul = G1Jacobian::scalar_mul_g1(&U256::from(2u32)).to_affine().unwrap();
+        let g1_2_by_mul = G1Jacobian::scalar_mul_g1(&U256::from(2u32))
+            .to_affine()
+            .unwrap();
         let g1_jac = G1Jacobian::from_affine(&p);
         let g1_2_by_double = g1_jac.double().to_affine().unwrap();
         use crate::sm9::fields::fp::fp_to_bytes;
         assert_eq!(
-            fp_to_bytes(&g1_2_by_mul.x), fp_to_bytes(&g1_2_by_double.x),
+            fp_to_bytes(&g1_2_by_mul.x),
+            fp_to_bytes(&g1_2_by_double.x),
             "G1 scalar_mul(2) != G1.double() in x"
         );
         assert_eq!(
-            fp_to_bytes(&g1_2_by_mul.y), fp_to_bytes(&g1_2_by_double.y),
+            fp_to_bytes(&g1_2_by_mul.y),
+            fp_to_bytes(&g1_2_by_double.y),
             "G1 scalar_mul(2) != G1.double() in y"
         );
 
         // 验证 G2 scalar_mul(2) == G2.double()
         let g2_jac = G2Jacobian::from_affine(&q);
-        let g2_2_by_mul = G2Jacobian::scalar_mul_g2(&U256::from(2u32)).to_affine().unwrap();
+        let g2_2_by_mul = G2Jacobian::scalar_mul_g2(&U256::from(2u32))
+            .to_affine()
+            .unwrap();
         let g2_2_by_double = g2_jac.double().to_affine().unwrap();
-        assert_eq!(g2_2_by_mul, g2_2_by_double, "G2 scalar_mul(2) != G2.double()");
+        assert_eq!(
+            g2_2_by_mul, g2_2_by_double,
+            "G2 scalar_mul(2) != G2.double()"
+        );
 
         // e(2G1, G2) == e(G1, G2)^2
         let e_2g1_g2 = pairing(&g1_2_by_mul, &q);
@@ -643,25 +652,30 @@ mod tests {
 
         // 中间验证：用 G1+G1 （点加法）得到 2G1
         let g1_jac2 = G1Jacobian::from_affine(&p);
-        let g1_add_g1 = G1Jacobian::add(&G1Jacobian::from_affine(&p), &g1_jac2).to_affine().unwrap();
+        let g1_add_g1 = G1Jacobian::add(&G1Jacobian::from_affine(&p), &g1_jac2)
+            .to_affine()
+            .unwrap();
         let e_addg1_g2 = pairing(&g1_add_g1, &q);
         assert_eq!(e_addg1_g2, e_sq, "e(G1+G1,G2) != e(G1,G2)²（用点加法）");
 
-        assert_eq!(e_2g1_g2, e_sq, "配对双线性性验证失败：e(2G1,G2) != e(G1,G2)²");
+        assert_eq!(
+            e_2g1_g2, e_sq,
+            "配对双线性性验证失败：e(2G1,G2) != e(G1,G2)²"
+        );
 
         // e(G1, 2G2) == e(G1, G2)^2
         let e_g1_2g2 = pairing(&p, &g2_2_by_mul);
-        assert_eq!(e_g1_2g2, e_sq, "配对双线性性验证失败：e(G1,2G2) != e(G1,G2)²");
+        assert_eq!(
+            e_g1_2g2, e_sq,
+            "配对双线性性验证失败：e(G1,2G2) != e(G1,G2)²"
+        );
     }
 }
 
 #[cfg(test)]
 mod pairing_tests {
     use super::*;
-    use crate::sm9::fields::fp12::{
-        fp12_conjugate, fp12_frobenius_p, fp12_frobenius_p2, fp12_frobenius_p3,
-        fp12_inv, fp12_mul, fp12_square, Fp12,
-    };
+    use crate::sm9::fields::fp12::{fp12_conjugate, fp12_frobenius_p, fp12_mul, fp12_square, Fp12};
     use crate::sm9::groups::g1::{G1Affine, G1Jacobian};
     use crate::sm9::groups::g2::{G2Affine, G2Jacobian};
     use crate::sm9::pairing::{final_exp, miller_loop, pairing};
@@ -671,7 +685,9 @@ mod pairing_tests {
     fn test_pairing_double_only() {
         let p = G1Affine::generator();
         let q = G2Affine::generator();
-        let g1_2 = G1Jacobian::scalar_mul_g1(&U256::from(2u32)).to_affine().unwrap();
+        let g1_2 = G1Jacobian::scalar_mul_g1(&U256::from(2u32))
+            .to_affine()
+            .unwrap();
 
         let e_g1_g2 = pairing(&p, &q);
         let e_sq = fp12_mul(&e_g1_g2, &e_g1_g2);
@@ -687,7 +703,9 @@ mod pairing_tests {
     fn test_miller_loop_raw_bilinear() {
         let p = G1Affine::generator();
         let q = G2Affine::generator();
-        let g1_2 = G1Jacobian::scalar_mul_g1(&U256::from(2u32)).to_affine().unwrap();
+        let g1_2 = G1Jacobian::scalar_mul_g1(&U256::from(2u32))
+            .to_affine()
+            .unwrap();
 
         let ml1 = miller_loop(&q, &p);
         let ml2 = miller_loop(&q, &g1_2);
@@ -699,14 +717,20 @@ mod pairing_tests {
         let ml1_sq_inv = fp12_inv(&ml1_sq).expect("inv should exist");
         let ratio = fp12_mul(&ml2, &ml1_sq_inv);
         let ratio_exp = final_exp(&ratio);
-        assert_eq!(ratio_exp, Fp12::ONE, "final_exp(ml(2G1,G2)/ml(G1,G2)^2) != 1");
+        assert_eq!(
+            ratio_exp,
+            Fp12::ONE,
+            "final_exp(ml(2G1,G2)/ml(G1,G2)^2) != 1"
+        );
     }
 
     #[test]
     fn test_miller_loop_bilinear() {
         let p = G1Affine::generator();
         let q = G2Affine::generator();
-        let g1_2 = G1Jacobian::scalar_mul_g1(&U256::from(2u32)).to_affine().unwrap();
+        let g1_2 = G1Jacobian::scalar_mul_g1(&U256::from(2u32))
+            .to_affine()
+            .unwrap();
 
         let ml_g1_g2 = miller_loop(&q, &p);
         let ml_2g1_g2 = miller_loop(&q, &g1_2);
@@ -714,7 +738,10 @@ mod pairing_tests {
         let gt1 = final_exp(&ml_g1_g2);
         let gt2 = final_exp(&ml_2g1_g2);
         let gt1_sq = fp12_square(&gt1);
-        assert_eq!(gt2, gt1_sq, "final_exp(ml(2G1,G2)) != final_exp(ml(G1,G2))^2");
+        assert_eq!(
+            gt2, gt1_sq,
+            "final_exp(ml(2G1,G2)) != final_exp(ml(G1,G2))^2"
+        );
     }
 
     #[test]
@@ -736,7 +763,11 @@ mod pairing_tests {
                 base = fp12_mul(&base, &base);
             }
         }
-        assert_eq!(result, Fp12::ONE, "e(G1,G2)^n != 1: GT element not in subgroup");
+        assert_eq!(
+            result,
+            Fp12::ONE,
+            "e(G1,G2)^n != 1: GT element not in subgroup"
+        );
     }
 
     /// 验证 ml^{p^6} == conjugate(ml)（Frobenius 正确性检查）
@@ -746,8 +777,9 @@ mod pairing_tests {
         let q = G2Affine::generator();
         let ml = miller_loop(&q, &p);
 
-        let ml_p6 = fp12_frobenius_p(&fp12_frobenius_p(&fp12_frobenius_p(
-            &fp12_frobenius_p(&fp12_frobenius_p(&fp12_frobenius_p(&ml))))));
+        let ml_p6 = fp12_frobenius_p(&fp12_frobenius_p(&fp12_frobenius_p(&fp12_frobenius_p(
+            &fp12_frobenius_p(&fp12_frobenius_p(&ml)),
+        ))));
         let ml_conj = fp12_conjugate(&ml);
         assert_eq!(ml_p6, ml_conj, "ml^{{p^6}} != conjugate(ml)");
     }
@@ -759,7 +791,6 @@ mod pairing_tests {
     #[test]
     fn test_single_double_step_line() {
         use crate::sm9::fields::fp::fp_to_bytes;
-        use crate::sm9::fields::fp12::fp12_inv;
 
         let g1 = G1Affine::generator();
         let g2 = G2Affine::generator();
@@ -773,7 +804,9 @@ mod pairing_tests {
         let g1_jac = G1Jacobian::from_affine(&g1);
         let g1_2_by_add = G1Jacobian::add(&g1_jac, &g1_jac).to_affine().unwrap();
         // 用标量乘法计算 2·G1
-        let g1_2_by_mul = G1Jacobian::scalar_mul_g1(&U256::from(2u32)).to_affine().unwrap();
+        let g1_2_by_mul = G1Jacobian::scalar_mul_g1(&U256::from(2u32))
+            .to_affine()
+            .unwrap();
 
         // 验证两种方式得到相同的 2G1
         assert_eq!(
@@ -788,7 +821,9 @@ mod pairing_tests {
         );
 
         // 检验 G2 侧双线性性：e(G1, 2G2) == e(G1, G2)^2
-        let g2_2 = G2Jacobian::scalar_mul_g2(&U256::from(2u32)).to_affine().unwrap();
+        let g2_2 = G2Jacobian::scalar_mul_g2(&U256::from(2u32))
+            .to_affine()
+            .unwrap();
         let e_g1_2g2 = pairing(&g1, &g2_2);
         let e_g1_g2_sq = fp12_mul(&e1, &e1);
         assert_eq!(
@@ -804,25 +839,40 @@ mod pairing_tests {
     /// 约定：a -> c0.c0(1 slot), b -> c0.c1(v slot), c -> c1.c0(w slot)
     #[test]
     fn test_line_eval_equivalence() {
-        use crate::sm9::fields::fp12::{
-            fp12_mul, fp12_mul_by_line, Fp12, Fp6, LineEval,
-        };
-        use crate::sm9::fields::fp2::Fp2;
         use crate::sm9::fields::fp::Fp;
+        use crate::sm9::fields::fp12::{fp12_mul, fp12_mul_by_line, Fp12, Fp6, LineEval};
+        use crate::sm9::fields::fp2::Fp2;
 
         // 验证 fp12_mul_by_line 等价于按约定槽位构造 full Fp12 再乘
         // 约定：a -> c0.c0(1 slot), b -> c1.c1(vw slot), c -> c1.c2(v²w slot)
         let line = LineEval {
-            a: Fp2 { c0: Fp::ONE, c1: Fp::ZERO },
-            b: Fp2 { c0: Fp::ONE, c1: Fp::ZERO },
-            c: Fp2 { c0: Fp::ONE, c1: Fp::ZERO },
+            a: Fp2 {
+                c0: Fp::ONE,
+                c1: Fp::ZERO,
+            },
+            b: Fp2 {
+                c0: Fp::ONE,
+                c1: Fp::ZERO,
+            },
+            c: Fp2 {
+                c0: Fp::ONE,
+                c1: Fp::ZERO,
+            },
         };
         let f = Fp12::ONE;
         let sparse_result = fp12_mul_by_line(&f, &line);
         // 按相同槽位手动构造 full Fp12（槽位 {c0.c0=a, c1.c1(vw)=b, c1.c2(v²w)=c}）
         let full_line = Fp12 {
-            c0: Fp6 { c0: line.a, c1: Fp2::ZERO, c2: Fp2::ZERO },
-            c1: Fp6 { c0: Fp2::ZERO, c1: line.b, c2: line.c },
+            c0: Fp6 {
+                c0: line.a,
+                c1: Fp2::ZERO,
+                c2: Fp2::ZERO,
+            },
+            c1: Fp6 {
+                c0: Fp2::ZERO,
+                c1: line.b,
+                c2: line.c,
+            },
         };
         let full_result = fp12_mul(&f, &full_line);
         assert_eq!(

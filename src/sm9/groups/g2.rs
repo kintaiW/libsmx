@@ -149,9 +149,9 @@ impl G2Jacobian {
         //   c = -3X₁²·Z₁² = -e·z1sq（在 eval_line_at_p 中乘以 xP→c1.c2(v²w)）
         let z1sq = fp2_square(z1);
         let line = LineEval {
-            a: fp2_mul_u(&fp2_mul(&z3, &z1sq)),            // 2Y₁Z₁³·u（×yP→c0.c0）
+            a: fp2_mul_u(&fp2_mul(&z3, &z1sq)), // 2Y₁Z₁³·u（×yP→c0.c0）
             b: fp2_sub(&fp2_mul(x1, &e), &fp2_add(&b, &b)), // 3X₁³-2Y₁²（→c1.c1(vw)）
-            c: fp2_neg(&fp2_mul(&e, &z1sq)),               // -3X₁²Z₁²（×xP→c1.c2(v²w)）
+            c: fp2_neg(&fp2_mul(&e, &z1sq)),    // -3X₁²Z₁²（×xP→c1.c2(v²w)）
         };
 
         (
@@ -190,9 +190,9 @@ impl G2Jacobian {
         //   b = X₁·Y₂·Z₁ - X₂·Y₁（常数项→c1.c1(vw)）
         //   c = -(Y₂Z₁³-Y₁) = -r（r已算，在 eval_line_at_p 中乘以 xP→c1.c2(v²w)）
         let line = LineEval {
-            a: fp2_mul_u(&z3),                                           // H·Z₁·u（×yP→c0.c0）
+            a: fp2_mul_u(&z3),                                            // H·Z₁·u（×yP→c0.c0）
             b: fp2_sub(&fp2_mul(&fp2_mul(x1, z1), y2), &fp2_mul(x2, y1)), // X₁Y₂Z₁-X₂Y₁（→c1.c1(vw)）
-            c: fp2_neg(&r),                                              // -(Y₂Z₁³-Y₁)（×xP→c1.c2(v²w)）
+            c: fp2_neg(&r), // -(Y₂Z₁³-Y₁)（×xP→c1.c2(v²w)）
         };
 
         (

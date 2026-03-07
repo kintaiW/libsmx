@@ -13,14 +13,12 @@ use libsmx::sm2::{get_e, get_z, sign_with_k, verify, PrivateKey};
 fn test_sm2_sign_verify_with_known_key() {
     // GB/T 32918.2-2016 附录 A 私钥
     let d_bytes =
-        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8")
-            .unwrap();
+        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8").unwrap();
     let k_bytes =
-        hex::decode("59276e27d506861a16680f3ad9c02dccef3cc1fa3cdbe4ce6d54b80deac1bc21")
-            .unwrap();
+        hex::decode("59276e27d506861a16680f3ad9c02dccef3cc1fa3cdbe4ce6d54b80deac1bc21").unwrap();
 
-    let pri_key = PrivateKey::from_bytes(d_bytes.as_slice().try_into().unwrap())
-        .expect("私钥应有效");
+    let pri_key =
+        PrivateKey::from_bytes(d_bytes.as_slice().try_into().unwrap()).expect("私钥应有效");
     let pub_key = pri_key.public_key();
 
     let id = b"ALICE123@YAHOO.COM";
@@ -43,15 +41,13 @@ fn test_sm2_sign_verify_with_known_key() {
 #[test]
 fn test_sm2_different_messages_different_sigs() {
     let d_bytes =
-        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8")
-            .unwrap();
+        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8").unwrap();
     let pri_key = PrivateKey::from_bytes(d_bytes.as_slice().try_into().unwrap()).unwrap();
     let pub_key = pri_key.public_key();
 
     let id = b"test_user";
     let k = U256::from_be_slice(
-        &hex::decode("59276e27d506861a16680f3ad9c02dccef3cc1fa3cdbe4ce6d54b80deac1bc21")
-            .unwrap(),
+        &hex::decode("59276e27d506861a16680f3ad9c02dccef3cc1fa3cdbe4ce6d54b80deac1bc21").unwrap(),
     );
 
     let z = get_z(id, &pub_key);
@@ -69,8 +65,7 @@ fn test_sm2_different_messages_different_sigs() {
 #[test]
 fn test_sm2_verify_tampered_message_fails() {
     let d_bytes =
-        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8")
-            .unwrap();
+        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8").unwrap();
     let pri_key = PrivateKey::from_bytes(d_bytes.as_slice().try_into().unwrap()).unwrap();
     let pub_key = pri_key.public_key();
 
@@ -80,8 +75,7 @@ fn test_sm2_verify_tampered_message_fails() {
     let e = get_e(&z, msg);
 
     let k = U256::from_be_slice(
-        &hex::decode("59276e27d506861a16680f3ad9c02dccef3cc1fa3cdbe4ce6d54b80deac1bc21")
-            .unwrap(),
+        &hex::decode("59276e27d506861a16680f3ad9c02dccef3cc1fa3cdbe4ce6d54b80deac1bc21").unwrap(),
     );
     let sig = sign_with_k(&e, &pri_key, &k).unwrap();
 
@@ -97,8 +91,7 @@ fn test_sm2_verify_tampered_message_fails() {
 #[test]
 fn test_sm2_verify_tampered_sig_fails() {
     let d_bytes =
-        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8")
-            .unwrap();
+        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8").unwrap();
     let pri_key = PrivateKey::from_bytes(d_bytes.as_slice().try_into().unwrap()).unwrap();
     let pub_key = pri_key.public_key();
 
@@ -108,24 +101,19 @@ fn test_sm2_verify_tampered_sig_fails() {
     let e = get_e(&z, msg);
 
     let k = U256::from_be_slice(
-        &hex::decode("59276e27d506861a16680f3ad9c02dccef3cc1fa3cdbe4ce6d54b80deac1bc21")
-            .unwrap(),
+        &hex::decode("59276e27d506861a16680f3ad9c02dccef3cc1fa3cdbe4ce6d54b80deac1bc21").unwrap(),
     );
     let mut sig = sign_with_k(&e, &pri_key, &k).unwrap();
     sig[0] ^= 1; // 篡改 r 的第一字节
 
-    assert!(
-        verify(&e, &pub_key, &sig).is_err(),
-        "篡改签名后验签应失败"
-    );
+    assert!(verify(&e, &pub_key, &sig).is_err(), "篡改签名后验签应失败");
 }
 
 /// Z 值计算确定性验证（相同输入产生相同 Z）
 #[test]
 fn test_sm2_z_value_deterministic() {
     let d_bytes =
-        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8")
-            .unwrap();
+        hex::decode("3945208f7b2144b13f36e38ac6d39f95889393692860b51a42fb81ef4df7c5b8").unwrap();
     let pri_key = PrivateKey::from_bytes(d_bytes.as_slice().try_into().unwrap()).unwrap();
     let pub_key = pri_key.public_key();
 

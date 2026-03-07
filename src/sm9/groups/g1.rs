@@ -88,7 +88,7 @@ impl G1Jacobian {
 
     /// 点倍运算（BN256 a=0 专用公式）
     ///
-    /// 公式来自 https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+    /// 公式来自 <https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l>
     pub fn double(&self) -> Self {
         if self.is_infinity() {
             return *self;

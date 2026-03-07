@@ -9,9 +9,8 @@
 
 use crate::sm9::fields::fp::Fp;
 use crate::sm9::fields::fp12::{
-    fp12_conjugate, fp12_frobenius_p, fp12_frobenius_p2, fp12_frobenius_p3,
-    fp12_inv, fp12_mul, fp12_mul_by_line, fp12_square, Fp12, LineEval,
-    G2_FROB_X1_INV, G2_FROB_Y1_INV, G2_FROB_X2_INV,
+    fp12_conjugate, fp12_frobenius_p, fp12_frobenius_p2, fp12_frobenius_p3, fp12_inv, fp12_mul,
+    fp12_mul_by_line, fp12_square, Fp12, LineEval, G2_FROB_X1_INV, G2_FROB_X2_INV, G2_FROB_Y1_INV,
 };
 use crate::sm9::fields::fp2::{fp2_frobenius, fp2_mul, fp2_mul_fp};
 use crate::sm9::groups::g1::G1Affine;
@@ -63,7 +62,7 @@ fn g2_frobenius_p2_neg(q: &G2Affine) -> G2Affine {
 fn eval_line_at_p(line: &LineEval, px: &Fp, py: &Fp) -> LineEval {
     LineEval {
         a: fp2_mul_fp(&line.a, py), // a × yP（放 c0.c0 槽）
-        b: line.b,                   // 常数项不变（放 c0.c1 v 槽）
+        b: line.b,                  // 常数项不变（放 c0.c1 v 槽）
         c: fp2_mul_fp(&line.c, px), // c × xP（放 c1.c0 w 槽）
     }
 }
@@ -167,25 +166,25 @@ const SM9_NINE: u128 = 9;
 /// Reason: Beuchat et al. 分解针对标准 BN256（以太坊参数），不适用于 SM9 BN256。
 ///   此函数使用 sm9_core 的 final_exp_last_chunk 算法（基于 SM9_A2/A3 常量）。
 fn final_exp_hard(f: &Fp12) -> Fp12 {
-    let a = fp12_cyclotomic_pow(f, SM9_A3);           // f^{A3}
-    let b = fp12_inv(&a).unwrap_or(Fp12::ONE);        // f^{-A3}
-    let c = fp12_frobenius_p(&b);                      // f^{-A3*p}
-    let d = fp12_mul(&c, &b);                          // f^{-A3*(p+1)}
-    let e = fp12_mul(&d, &b);                          // f^{-A3*(p+2)}
-    let f_p1 = fp12_frobenius_p(f);                    // f^p
-    let g = fp12_mul(f, &f_p1);                        // f^{p+1}
-    let h = fp12_cyclotomic_pow(&g, SM9_NINE);         // f^{9(p+1)}
-    let i = fp12_mul(&e, &h);                          // f^{-A3*(p+2)+9(p+1)}
-    let j = fp12_square(f);                            // f^2
-    let k = fp12_square(&j);                           // f^4
-    let l = fp12_mul(&k, &i);                          // f^{4 + -A3*(p+2) + 9(p+1)}
-    let m = fp12_square(&f_p1);                        // f^{2p}
-    let n = fp12_mul(&d, &m);                          // f^{-A3*(p+1)+2p}
-    let o = fp12_frobenius_p2(f);                      // f^{p^2}
-    let p_var = fp12_mul(&o, &n);                      // f^{p^2-A3*(p+1)+2p}
-    let q = fp12_cyclotomic_pow(&p_var, SM9_A2);       // ...^{A2}
+    let a = fp12_cyclotomic_pow(f, SM9_A3); // f^{A3}
+    let b = fp12_inv(&a).unwrap_or(Fp12::ONE); // f^{-A3}
+    let c = fp12_frobenius_p(&b); // f^{-A3*p}
+    let d = fp12_mul(&c, &b); // f^{-A3*(p+1)}
+    let e = fp12_mul(&d, &b); // f^{-A3*(p+2)}
+    let f_p1 = fp12_frobenius_p(f); // f^p
+    let g = fp12_mul(f, &f_p1); // f^{p+1}
+    let h = fp12_cyclotomic_pow(&g, SM9_NINE); // f^{9(p+1)}
+    let i = fp12_mul(&e, &h); // f^{-A3*(p+2)+9(p+1)}
+    let j = fp12_square(f); // f^2
+    let k = fp12_square(&j); // f^4
+    let l = fp12_mul(&k, &i); // f^{4 + -A3*(p+2) + 9(p+1)}
+    let m = fp12_square(&f_p1); // f^{2p}
+    let n = fp12_mul(&d, &m); // f^{-A3*(p+1)+2p}
+    let o = fp12_frobenius_p2(f); // f^{p^2}
+    let p_var = fp12_mul(&o, &n); // f^{p^2-A3*(p+1)+2p}
+    let q = fp12_cyclotomic_pow(&p_var, SM9_A2); // ...^{A2}
     let r = fp12_mul(&q, &l);
-    let s = fp12_frobenius_p3(f);                      // f^{p^3}
+    let s = fp12_frobenius_p3(f); // f^{p^3}
     fp12_mul(&s, &r)
 }
 

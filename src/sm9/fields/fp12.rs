@@ -1,9 +1,9 @@
 //! SM9 BN256 六次/十二次扩域 Fp6 / Fp12
 //!
 //! 塔式扩域：
-//!   Fp2 = Fp[u]/(u²+2)
-//!   Fp6 = Fp2[v]/(v³-u)     即 v³ = u
-//!   Fp12 = Fp6[w]/(w²-v)   即 w² = v
+//!   `Fp2 = Fp[u]/(u²+2)`
+//!   `Fp6 = Fp2[v]/(v³-u)`     即 v³ = u
+//!   `Fp12 = Fp6[w]/(w²-v)`   即 w² = v
 //!
 //! Frobenius 系数为编译期常量，源自 GB/T 38635.1-2020 及参考实现。
 
@@ -489,7 +489,8 @@ pub fn fp12_to_bytes(a: &Fp12) -> [u8; 384] {
 /// - a: yP 系数 -> c0.c0（1 slot，在 eval_line_at_p 中乘以 yP）
 /// - b: 常数项 -> c0.c1（v slot）
 /// - c: xP 系数 -> c1.c0（w slot，在 eval_line_at_p 中乘以 xP）
-/// Reason: 经双线性性测试验证，此约定对应 D-type twist BN256 配对正确系数。
+///
+///   Reason: 经双线性性测试验证，此约定对应 D-type twist BN256 配对正确系数。
 ///   double step: a=Z₁²·u, b=-2Y₁Z₁, c=3X₁²
 ///   add step:    a=r·x2, b=-(r·x1+h·y1), c=h·y2
 #[derive(Clone, Copy, Debug)]
@@ -509,7 +510,7 @@ pub struct LineEval {
 ///   - a 系数（yP 项）→ c0.c0 (1 slot)
 ///   - b 系数（常数项）→ c1.c1 (vw slot)
 ///   - c 系数（xP 项）→ c1.c2 (v²w slot)
-///   a、c 已经在 eval_line_at_p 中分别乘以 yP 和 xP。
+///     a、c 已经在 eval_line_at_p 中分别乘以 yP 和 xP。
 pub fn fp12_mul_by_line(f: &Fp12, l: &LineEval) -> Fp12 {
     let line_fp12 = Fp12 {
         c0: Fp6 {
@@ -525,7 +526,6 @@ pub fn fp12_mul_by_line(f: &Fp12, l: &LineEval) -> Fp12 {
     };
     fp12_mul(f, &line_fp12)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -591,15 +591,25 @@ mod tests {
 
     /// 验证稀疏线函数乘法与全量 fp12_mul 结果一致
     #[test]
-    fn test_fp12_mul_by_line_matches_full_mul() {        // 构造一个非平凡的 f
+    fn test_fp12_mul_by_line_matches_full_mul() {
+        // 构造一个非平凡的 f
         let f = Fp12 {
             c0: Fp6 {
-                c0: Fp2 { c0: Fp::ONE, c1: Fp::ONE },
-                c1: Fp2 { c0: Fp::ONE, c1: Fp::ZERO },
+                c0: Fp2 {
+                    c0: Fp::ONE,
+                    c1: Fp::ONE,
+                },
+                c1: Fp2 {
+                    c0: Fp::ONE,
+                    c1: Fp::ZERO,
+                },
                 c2: Fp2::ZERO,
             },
             c1: Fp6 {
-                c0: Fp2 { c0: Fp::ZERO, c1: Fp::ONE },
+                c0: Fp2 {
+                    c0: Fp::ZERO,
+                    c1: Fp::ONE,
+                },
                 c1: Fp2::ZERO,
                 c2: Fp2::ZERO,
             },
@@ -607,9 +617,18 @@ mod tests {
 
         // 构造非零线函数
         let l = LineEval {
-            a: Fp2 { c0: Fp::ONE, c1: Fp::ONE },
-            b: Fp2 { c0: Fp::ONE, c1: Fp::ZERO },
-            c: Fp2 { c0: Fp::ZERO, c1: Fp::ONE },
+            a: Fp2 {
+                c0: Fp::ONE,
+                c1: Fp::ONE,
+            },
+            b: Fp2 {
+                c0: Fp::ONE,
+                c1: Fp::ZERO,
+            },
+            c: Fp2 {
+                c0: Fp::ZERO,
+                c1: Fp::ONE,
+            },
         };
 
         // 稀疏乘法结果
@@ -618,8 +637,16 @@ mod tests {
         // 构造全量 Fp12 线函数并做全量乘法（与 fp12_mul_by_line slot 保持一致）
         // 槽位约定：a→c0.c0(1), b→c1.c1(vw), c→c1.c2(v²w)
         let line_full = Fp12 {
-            c0: Fp6 { c0: l.a, c1: Fp2::ZERO, c2: Fp2::ZERO },
-            c1: Fp6 { c0: Fp2::ZERO, c1: l.b, c2: l.c },
+            c0: Fp6 {
+                c0: l.a,
+                c1: Fp2::ZERO,
+                c2: Fp2::ZERO,
+            },
+            c1: Fp6 {
+                c0: Fp2::ZERO,
+                c1: l.b,
+                c2: l.c,
+            },
         };
         let full = fp12_mul(&f, &line_full);
 
@@ -631,17 +658,34 @@ mod tests {
     fn test_frob_w3_derivation() {
         // 验证 fp12 Frobenius 一致性：frob_p(frob_p(f)) == frob_p2(f)
         let f = Fp12 {
-            c0: Fp6 { c0: Fp2 { c0: Fp::ONE, c1: Fp::ONE }, c1: Fp2::ONE, c2: Fp2::ZERO },
-            c1: Fp6 { c0: Fp2::ONE, c1: Fp2::ZERO, c2: Fp2::ZERO },
+            c0: Fp6 {
+                c0: Fp2 {
+                    c0: Fp::ONE,
+                    c1: Fp::ONE,
+                },
+                c1: Fp2::ONE,
+                c2: Fp2::ZERO,
+            },
+            c1: Fp6 {
+                c0: Fp2::ONE,
+                c1: Fp2::ZERO,
+                c2: Fp2::ZERO,
+            },
         };
         let fp1 = fp12_frobenius_p(&f);
-        let fp1p1 = fp12_frobenius_p(&fp1);  // frob_p^2(f)
+        let fp1p1 = fp12_frobenius_p(&fp1); // frob_p^2(f)
         let fp2 = fp12_frobenius_p2(&f);
-        assert_eq!(fp1p1, fp2, "frob_p(frob_p(f)) != frob_p2(f)：fp12 Frobenius 不一致");
+        assert_eq!(
+            fp1p1, fp2,
+            "frob_p(frob_p(f)) != frob_p2(f)：fp12 Frobenius 不一致"
+        );
 
-        let fp2p1 = fp12_frobenius_p(&fp2);  // frob_p^3(f)
+        let fp2p1 = fp12_frobenius_p(&fp2); // frob_p^3(f)
         let fp3 = fp12_frobenius_p3(&f);
-        assert_eq!(fp2p1, fp3, "frob_p(frob_p2(f)) != frob_p3(f)：fp12_frobenius_p3 系数错误");
+        assert_eq!(
+            fp2p1, fp3,
+            "frob_p(frob_p2(f)) != frob_p3(f)：fp12_frobenius_p3 系数错误"
+        );
     }
 
     /// 验证 Fp6 Frobenius 保持 ONE
@@ -661,7 +705,10 @@ mod tests {
     fn test_frob_v1_squared() {
         use crate::sm9::fields::fp2::fp2_mul;
         let v1_sq = fp2_mul(&FROB_V1_0, &FROB_V1_0);
-        assert_eq!(v1_sq, FROB_V1_1, "FROB_V1_0² 应等于 FROB_V1_1（fp6 Frobenius 一致性）");
+        assert_eq!(
+            v1_sq, FROB_V1_1,
+            "FROB_V1_0² 应等于 FROB_V1_1（fp6 Frobenius 一致性）"
+        );
     }
 
     /// 计算 u^{(p-1)/3} 并与 FROB_V1_0 对比（验证常量正确性）
@@ -670,14 +717,15 @@ mod tests {
     #[test]
     fn test_frob_v1_0_value_correct() {
         use crate::sm9::fields::fp::FIELD_MODULUS;
-        use crate::sm9::fields::fp2::{fp2_mul, fp2_square};
-        use subtle::ConditionallySelectable;
+        use crate::sm9::fields::fp2::fp2_mul;
         // 计算 u^{(p-1)/3} 其中 u = (0, 1) ∈ Fp2
         let pm1 = FIELD_MODULUS.wrapping_sub(&crypto_bigint::U256::ONE);
-        let (pm1_div3, rem) = pm1.div_rem(&crypto_bigint::NonZero::new(crypto_bigint::U256::from(3u32)).unwrap());
+        let (pm1_div3, rem) =
+            pm1.div_rem(&crypto_bigint::NonZero::new(crypto_bigint::U256::from(3u32)).unwrap());
         assert_eq!(rem, crypto_bigint::U256::ZERO, "(p-1) 应被 3 整除");
 
-        let (pm1_div6, _) = pm1.div_rem(&crypto_bigint::NonZero::new(crypto_bigint::U256::from(6u32)).unwrap());
+        let (pm1_div6, _) =
+            pm1.div_rem(&crypto_bigint::NonZero::new(crypto_bigint::U256::from(6u32)).unwrap());
 
         fn fp2_pow_exp(base: &Fp2, exp: &crypto_bigint::U256) -> Fp2 {
             use crate::sm9::fields::fp2::{fp2_mul, fp2_square};
@@ -695,7 +743,10 @@ mod tests {
             result
         }
 
-        let u = Fp2 { c0: crate::sm9::fields::fp::Fp::ZERO, c1: crate::sm9::fields::fp::Fp::ONE };
+        let u = Fp2 {
+            c0: crate::sm9::fields::fp::Fp::ZERO,
+            c1: crate::sm9::fields::fp::Fp::ONE,
+        };
         // 正确的 γ_{1,1} = u^{(p-1)/3}
         let correct_v1_0 = fp2_pow_exp(&u, &pm1_div3);
         // 正确的 δ_{1,1} = u^{(p-1)/6}（FROB_W1）
@@ -707,7 +758,8 @@ mod tests {
 
         // 打印正确的常量值（以标准 32 字节大端 hex 格式，供直接写入代码）
         assert_eq!(
-            correct_v1_0, FROB_V1_0,
+            correct_v1_0,
+            FROB_V1_0,
             "FROB_V1_0 需更新：正确值={:02X?}, FROB_W1 正确值 c0={:02X?} c1={:02X?}",
             correct_v1_0.c0.retrieve().to_be_bytes(),
             correct_w1.c0.retrieve().to_be_bytes(),
@@ -742,24 +794,25 @@ mod g2_frob_tests {
 
         let p = FIELD_MODULUS;
         let pm1 = p.wrapping_sub(&crypto_bigint::U256::ONE);
-        let u = Fp2 { c0: Fp::ZERO, c1: Fp::ONE };
+        let u = Fp2 {
+            c0: Fp::ZERO,
+            c1: Fp::ONE,
+        };
 
         let pm1_div2 = pm1.wrapping_shr(1);
         let u_pm1_div2 = fp2_pow_exp(&u, &pm1_div2);
 
-        let (pm1_div3, _) = pm1.div_rem(&crypto_bigint::NonZero::new(crypto_bigint::U256::from(3u32)).unwrap());
+        let (pm1_div3, _) =
+            pm1.div_rem(&crypto_bigint::NonZero::new(crypto_bigint::U256::from(3u32)).unwrap());
         let u_pm1_div3 = fp2_pow_exp(&u, &pm1_div3);
 
         let pp1 = p.wrapping_add(&crypto_bigint::U256::ONE);
         let u_pm21_div3 = fp2_pow_exp(&u_pm1_div3, &pp1);
-        let u_pm21_div2 = fp2_pow_exp(&u_pm1_div2, &pp1);
 
         // Reason: 验证 G2 Frobenius 修正常量与计算值一致
         // u^{(p-1)/2} 应等于 G2_FROB_Y1
-        assert_eq!(u_pm1_div2, G2_FROB_Y1,
-            "u^(p-1)/2 应等于 G2_FROB_Y1");
+        assert_eq!(u_pm1_div2, G2_FROB_Y1, "u^(p-1)/2 应等于 G2_FROB_Y1");
         // u^{(p²-1)/3} 应等于 G2_FROB_X2
-        assert_eq!(u_pm21_div3, G2_FROB_X2,
-            "u^(p2-1)/3 应等于 G2_FROB_X2");
+        assert_eq!(u_pm21_div3, G2_FROB_X2, "u^(p2-1)/3 应等于 G2_FROB_X2");
     }
 }

@@ -4,8 +4,8 @@
 
 use libsmx::sm9::{
     generate_enc_master_keypair, generate_enc_user_key, generate_sign_master_keypair,
-    generate_sign_user_key, sm9_decrypt, sm9_encrypt, sm9_sign, sm9_verify,
-    Sm9EncPubKey, Sm9MasterPrivKey, Sm9SignPubKey,
+    generate_sign_user_key, sm9_decrypt, sm9_encrypt, sm9_sign, sm9_verify, Sm9EncPubKey,
+    Sm9SignPubKey,
 };
 use rand_core::RngCore;
 
@@ -180,11 +180,11 @@ mod pairing_reference_tests {
     /// This tests with a hardcoded known-good pairing value
     #[test]
     fn test_pairing_against_sm9core() {
-        use sm9_core::{G1, G2, Group};
+        use libsmx::sm9::fields::fp12::fp12_to_bytes;
         use libsmx::sm9::groups::g1::G1Affine;
         use libsmx::sm9::groups::g2::G2Affine;
         use libsmx::sm9::pairing::pairing;
-        use libsmx::sm9::fields::fp12::fp12_to_bytes;
+        use sm9_core::{Group, G1, G2};
 
         // Get sm9_core reference pairing of generators
         let g1_ref = G1::one();
@@ -201,7 +201,7 @@ mod pairing_reference_tests {
         // Print both for debugging
         println!("sm9_core ref bytes[0..32]: {:02x?}", &ref_bytes[0..32]);
         println!("our bytes[0..32]: {:02x?}", &our_bytes[0..32]);
-        
+
         // They can't be directly compared due to different tower structures
         // But we can verify by checking if our e(G1,G2)^order == 1
         // For now, just print to help diagnose

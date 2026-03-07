@@ -70,12 +70,13 @@ fn hash_to_range(z: &[u8], hid: u8, n: &U256) -> U256 {
     let h_raw = U256::from_be_slice(&ha[..32]);
 
     // h = h_raw mod (n-1) + 1，确保 h ∈ [1, n-1]
-    // 由于 h_raw 可能 ≥ n-1，使用模运算
-    // crypto_bigint 无直接 mod，改用减法循环（n 是 256 位素数，循环次数最多 1 次）
-    let mut h = h_raw;
-    while h >= n_minus_1 {
-        h = h.wrapping_sub(&n_minus_1);
-    }
+    // Reason: 原 while 循环的执行次数取决于 h_raw 是否 ≥ n-1，泄露 1 bit 信息。
+    //   改用无条件减法 + 掩码选择（conditional_select），执行时间与 h_raw 值无关。
+    //   crypto_bigint::Uint 实现了 subtle::ConstantTimeLess，ct_lt 为常量时间比较。
+    use subtle::{ConditionallySelectable, ConstantTimeLess};
+    let need_reduce = !h_raw.ct_lt(&n_minus_1); // h_raw >= n_minus_1
+    let reduced = h_raw.wrapping_sub(&n_minus_1);
+    let h = U256::conditional_select(&h_raw, &reduced, need_reduce);
     h.wrapping_add(&U256::ONE)
 }
 

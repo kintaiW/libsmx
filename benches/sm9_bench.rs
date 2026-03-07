@@ -64,9 +64,7 @@ fn bench_sm9_decrypt(c: &mut Criterion) {
     let msg = b"SM9 decryption benchmark plaintext";
     let ct = sm9_encrypt(id, msg, &pub_key, &mut OsRng).unwrap();
 
-    c.bench_function("SM9/decrypt", |b| {
-        b.iter(|| sm9_decrypt(id, &ct, &de))
-    });
+    c.bench_function("SM9/decrypt", |b| b.iter(|| sm9_decrypt(id, &ct, &de)));
 }
 
 criterion_group!(

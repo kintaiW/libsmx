@@ -81,20 +81,30 @@ impl JacobianPoint {
         })
     }
 
-    /// 判断是否为无穷远点（常量时间通过字节检查）
+    /// 判断是否为无穷远点（常量时间，公开接口）
     pub fn is_infinity(&self) -> bool {
-        // Reason: Z==0 等价于无穷远点，检查所有字节为 0
-        fp_to_bytes(&self.z).iter().all(|&b| b == 0)
+        bool::from(self.ct_is_infinity())
     }
 
-    /// 点倍运算（Jacobian 坐标，a=-3 优化公式）
+    /// 常量时间无穷远判断（内部辅助，返回 Choice）
     ///
-    /// 公式来自 https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html#doubling-dbl-2001-b
+    /// Reason: 返回 Choice 供 conditional_select 直接使用，避免 bool 转换后再转回 Choice
+    fn ct_is_infinity(&self) -> Choice {
+        // Reason: 用 ConstantTimeEq 比较所有 32 字节，执行时间与 Z 值无关，
+        //   替代 Iterator::all 的短路求值（后者泄露 Z 坐标前缀信息）。
+        use subtle::ConstantTimeEq;
+        fp_to_bytes(&self.z).ct_eq(&[0u8; 32])
+    }
+
+    /// 点倍运算（Jacobian 坐标，a=-3 优化公式，完全常量时间）
+    ///
+    /// 公式来自 <https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html#doubling-dbl-2001-b>
     /// SM2 曲线 a = p-3 ≡ -3 (mod p)，使用 a=-3 特化公式降低乘法次数。
+    ///
+    /// # 安全性
+    /// 无条件执行完整运算，用 `conditional_select` 处理无穷远退化情况，
+    /// 消除 `if is_infinity()` 分支对标量前导零位的泄露。
     pub fn double(&self) -> Self {
-        if self.is_infinity() {
-            return *self;
-        }
         let (x1, y1, z1) = (&self.x, &self.y, &self.z);
 
         let delta = fp_square(z1); // Z1²
@@ -118,24 +128,32 @@ impl JacobianPoint {
             &double2(&double1(&gamma2)),
         );
 
-        JacobianPoint {
+        let d = JacobianPoint {
             x: x3,
             y: y3,
             z: z3,
-        }
+        };
+        // Reason: 无穷远点的倍点仍为无穷远点；用掩码选择替代 if 分支，
+        //   避免 scalar_mul 热路径中泄露哪些迭代位为前导零。
+        JacobianPoint::conditional_select(&d, self, self.ct_is_infinity())
     }
 
-    /// 点加运算（完整 Jacobian 公式，处理特殊情况）
+    /// 点加运算（完全常量时间，无条件分支）
     ///
-    /// 公式来自 https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html#addition-add-2007-bl
-    /// 当 P==Q 退化为倍点，当 P==-Q 退化为无穷远点。
+    /// 公式来自 <https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html#addition-add-2007-bl>
+    ///
+    /// # 安全性
+    /// 采用"计算所有情况 + 掩码选择"策略，消除全部退化情况的条件分支：
+    /// - P = ∞ → Q（无穷远加法单位元）
+    /// - Q = ∞ → P
+    /// - P = Q → double(P)（相同点，用 ct_eq 检测 H==0 且 R==0）
+    /// - P = -Q → ∞（互反点，用 ct_eq 检测 H==0 且 R≠0）
+    /// - 正常情况 → 标准 Jacobian 加法
+    ///
+    /// Reason: 原实现的 3 处 `if` 分支（is_infinity、H==0、R==0）
+    ///   在 scalar_mul 热路径中泄露标量的汉明重量及位分布。
     pub fn add(p: &JacobianPoint, q: &JacobianPoint) -> JacobianPoint {
-        if p.is_infinity() {
-            return *q;
-        }
-        if q.is_infinity() {
-            return *p;
-        }
+        use subtle::ConstantTimeEq;
 
         let z1sq = fp_square(&p.z);
         let z2sq = fp_square(&q.z);
@@ -147,33 +165,45 @@ impl JacobianPoint {
         let h = fp_sub(&u2, &u1);
         let r = fp_sub(&s2, &s1);
 
-        // H==0 时 P、Q 在同一射影位置
-        if fp_to_bytes(&h).iter().all(|&b| b == 0) {
-            return if fp_to_bytes(&r).iter().all(|&b| b == 0) {
-                p.double() // P == Q
-            } else {
-                JacobianPoint::INFINITY // P == -Q
-            };
-        }
+        // 常量时间零判断（替代 Iterator::all 短路）
+        let h_is_zero = fp_to_bytes(&h).ct_eq(&[0u8; 32]);
+        let r_is_zero = fp_to_bytes(&r).ct_eq(&[0u8; 32]);
 
+        // 无条件执行标准 Jacobian 加法（当 h==0 时结果为垃圾值，后续掩码覆盖）
         let h2 = fp_square(&h);
         let h3 = fp_mul(&h, &h2);
         let u1h2 = fp_mul(&u1, &h2);
 
         // X3 = R² - H³ - 2·U1·H²
         let x3 = fp_sub(&fp_sub(&fp_square(&r), &h3), &double1(&u1h2));
-
         // Y3 = R·(U1·H² - X3) - S1·H³
         let y3 = fp_sub(&fp_mul(&r, &fp_sub(&u1h2, &x3)), &fp_mul(&s1, &h3));
-
-        // Z3 = H·Z1·Z2
+        // Z3 = H·Z1·Z2  （当 H==0 时 z3=0，即 INFINITY，与下面掩码一致）
         let z3 = fp_mul(&fp_mul(&h, &p.z), &q.z);
-
-        JacobianPoint {
+        let normal = JacobianPoint {
             x: x3,
             y: y3,
             z: z3,
-        }
+        };
+
+        // 预计算 P==Q 退化情况的结果（无条件执行，结果由掩码决定是否使用）
+        let double_p = p.double();
+
+        // 按优先级从低到高用 conditional_select 叠加（后面覆盖前面）：
+        // 优先级 1（最低）：正常 Jacobian 加法
+        let result = normal;
+        // 优先级 2：P == -Q → INFINITY（h==0 且 r≠0）
+        let result = JacobianPoint::conditional_select(
+            &result,
+            &JacobianPoint::INFINITY,
+            h_is_zero & !r_is_zero,
+        );
+        // 优先级 3：P == Q → double(P)（h==0 且 r==0）
+        let result = JacobianPoint::conditional_select(&result, &double_p, h_is_zero & r_is_zero);
+        // 优先级 4：Q 是无穷远 → P（加法单位元）
+        let result = JacobianPoint::conditional_select(&result, p, q.ct_is_infinity());
+        // 优先级 5（最高）：P 是无穷远 → Q
+        JacobianPoint::conditional_select(&result, q, p.ct_is_infinity())
     }
 
     /// 标量乘 k·P（常量时间，固定 256 位迭代）
@@ -200,10 +230,9 @@ impl JacobianPoint {
         result
     }
 
-    /// 基点标量乘 k·G（密钥生成和签名专用）
+    /// 基点标量乘 k·G（密钥生成和签名专用，使用 w=4 固定窗口加速）
     pub fn scalar_mul_g(k: &U256) -> JacobianPoint {
-        let g = JacobianPoint::from_affine(&AffinePoint { x: GX, y: GY });
-        Self::scalar_mul(k, &g)
+        scalar_mul_g_window(k)
     }
 }
 
@@ -218,6 +247,120 @@ fn double1(a: &Fp) -> Fp {
 fn double2(a: &Fp) -> Fp {
     let t = double1(a);
     double1(&t)
+}
+
+// ── 混合 Jacobian-仿射加法（q.Z = 1 优化）────────────────────────────────────
+
+/// 混合点加 P（Jacobian）+ Q（Affine，Z=1）
+///
+/// 相比标准 Jacobian+Jacobian 加法，利用 Z_Q=1 省去：
+/// - Z2² 计算（1 次 fp_square）
+/// - X1·Z2² 简化为 X1（0 次乘法）
+/// - Y1·Z2³ 简化为 Y1（0 次乘法）
+/// - Z3 中的 Z2 乘法（Z3 = H·Z1，而非 H·Z1·Z2）
+///
+/// 共节省约 3~4 次域乘法，用于预计算表构建和 multi_scalar_mul 内循环。
+///
+/// # 安全性
+/// 完全常量时间，退化情况处理与 `JacobianPoint::add` 相同。
+fn add_mixed(p: &JacobianPoint, q: &AffinePoint) -> JacobianPoint {
+    use subtle::ConstantTimeEq;
+
+    // Z_Q = 1，故 u1 = X1，s1 = Y1（无需额外乘法）
+    let z1sq = fp_square(&p.z); // Z1²
+    let z1cu = fp_mul(&p.z, &z1sq); // Z1³
+    let u2 = fp_mul(&q.x, &z1sq); // X2·Z1²
+    let s2 = fp_mul(&q.y, &z1cu); // Y2·Z1³
+
+    let h = fp_sub(&u2, &p.x);
+    let r = fp_sub(&s2, &p.y);
+
+    let h_is_zero = fp_to_bytes(&h).ct_eq(&[0u8; 32]);
+    let r_is_zero = fp_to_bytes(&r).ct_eq(&[0u8; 32]);
+
+    let h2 = fp_square(&h);
+    let h3 = fp_mul(&h, &h2);
+    let u1h2 = fp_mul(&p.x, &h2);
+
+    let x3 = fp_sub(&fp_sub(&fp_square(&r), &h3), &double1(&u1h2));
+    let y3 = fp_sub(&fp_mul(&r, &fp_sub(&u1h2, &x3)), &fp_mul(&p.y, &h3));
+    // Reason: Z_Q = 1，故 Z3 = H·Z1·Z2 = H·Z1，节省一次乘法
+    let z3 = fp_mul(&h, &p.z);
+    let normal = JacobianPoint {
+        x: x3,
+        y: y3,
+        z: z3,
+    };
+
+    let double_p = p.double();
+
+    let result = normal;
+    let result = JacobianPoint::conditional_select(
+        &result,
+        &JacobianPoint::INFINITY,
+        h_is_zero & !r_is_zero,
+    );
+    let result = JacobianPoint::conditional_select(&result, &double_p, h_is_zero & r_is_zero);
+    // P = INFINITY → 返回 Q（注：预计算表中 Q 绝不是无穷远点，
+    //   但在通用调用中仍需正确处理）
+    let q_jac = JacobianPoint::from_affine(q);
+    JacobianPoint::conditional_select(&result, &q_jac, p.ct_is_infinity())
+}
+
+// ── SM2 基点固定窗口标量乘（w=4）─────────────────────────────────────────────
+
+/// 基点固定窗口标量乘 k·G（w=4，预计算 15 个点，常量时间）
+///
+/// 原理：将 256-bit 标量按 4-bit 切分为 64 个窗口。
+/// 每个窗口先执行 4 次倍点，再常量时间查表做一次加法。
+/// 共需 256 次 double + 64 次 add，相比双倍-加法的 256 次 add 节省约 75%。
+///
+/// Reason: 预计算表仅含 G 的已知倍数（公开常量基点），不依赖秘密输入；
+///   窗口值为秘密标量位，但表查找通过 15 次 `conditional_select` 实现，
+///   不含任何数据依赖分支，保持常量时间性质。
+fn scalar_mul_g_window(k: &U256) -> JacobianPoint {
+    use subtle::ConstantTimeEq;
+
+    let g_aff = AffinePoint { x: GX, y: GY };
+    let g_jac = JacobianPoint::from_affine(&g_aff);
+
+    // 预计算表：table[i] = i·G，i = 0..=15（table[0] = INFINITY，占位不用）
+    // Reason: 使用 add_mixed 构建表，g_aff 始终 Z=1，节省约 3 次域乘/步
+    let mut table = [JacobianPoint::INFINITY; 16];
+    table[1] = g_jac;
+    for i in 2..=15usize {
+        table[i] = add_mixed(&table[i - 1], &g_aff);
+    }
+
+    let mut result = JacobianPoint::INFINITY;
+    for byte in &k.to_be_bytes() {
+        // ── 高 4 位窗口 ─────────────────────────────────────────────────────
+        for _ in 0..4 {
+            result = result.double();
+        }
+        let window = byte >> 4;
+        // 常量时间表查找：遍历 1..=15，用 ct_eq 选出 table[window]
+        let mut sel = JacobianPoint::INFINITY;
+        for j in 1u8..=15 {
+            let eq = window.ct_eq(&j);
+            sel = JacobianPoint::conditional_select(&sel, &table[j as usize], eq);
+        }
+        // window=0 时 sel 仍为 INFINITY，add(result, INFINITY) = result
+        result = JacobianPoint::add(&result, &sel);
+
+        // ── 低 4 位窗口 ─────────────────────────────────────────────────────
+        for _ in 0..4 {
+            result = result.double();
+        }
+        let window = byte & 0xF;
+        let mut sel = JacobianPoint::INFINITY;
+        for j in 1u8..=15 {
+            let eq = window.ct_eq(&j);
+            sel = JacobianPoint::conditional_select(&sel, &table[j as usize], eq);
+        }
+        result = JacobianPoint::add(&result, &sel);
+    }
+    result
 }
 
 // ── AffinePoint 公开接口 ──────────────────────────────────────────────────────
@@ -323,10 +466,13 @@ impl AffinePoint {
 /// Shamir's trick 预计算 {P, Q, P+Q}，每位只需 1 次 double + 最多 1 次 add，
 /// 比两次独立标量乘（各 256 次 double + 平均 128 add）快约 25%。
 pub fn multi_scalar_mul(u: &U256, v: &U256, q: &AffinePoint) -> Result<AffinePoint, Error> {
+    // Reason: u、v 均为验签公开值，non-CT 的 match 分支不泄露秘密；
+    //   使用 add_mixed(Jacobian, Affine) 替代全量 Jacobian add，
+    //   节省约 3 次域乘/步，g 和 q 已是仿射坐标直接传入。
     let g = AffinePoint::generator();
-    let g_jac = JacobianPoint::from_affine(&g);
     let q_jac = JacobianPoint::from_affine(q);
-    // 预计算 P+Q（G+Q）
+    let g_jac = JacobianPoint::from_affine(&g);
+    // 预计算 G+Q（Jacobian，含退化处理）
     let gq_jac = JacobianPoint::add(&g_jac, &q_jac);
 
     let u_bytes = u.to_be_bytes();
@@ -341,15 +487,13 @@ pub fn multi_scalar_mul(u: &U256, v: &U256, q: &AffinePoint) -> Result<AffinePoi
             result = result.double();
             let ui = (ub >> b) & 1;
             let vi = (vb >> b) & 1;
-            // Reason: 根据两个标量位的组合，选择加哪个预计算点
-            let addend = match (ui, vi) {
-                (1, 0) => Some(&g_jac),
-                (0, 1) => Some(&q_jac),
-                (1, 1) => Some(&gq_jac),
-                _ => None,
-            };
-            if let Some(p) = addend {
-                result = JacobianPoint::add(&result, p);
+            // Reason: u、v 公开，match 分支安全；add_mixed 对仿射 g/q 节省域乘，
+            //   gq 为 Jacobian 仍用全量 add（无额外求逆开销）
+            match (ui, vi) {
+                (1, 0) => result = add_mixed(&result, &g),
+                (0, 1) => result = add_mixed(&result, q),
+                (1, 1) => result = JacobianPoint::add(&result, &gq_jac),
+                _ => {}
             }
         }
     }
@@ -421,5 +565,46 @@ mod tests {
         let ax = fp_mul(&CURVE_A, &pub_aff.x);
         let rhs = fp_add(&fp_add(&x3, &ax), &CURVE_B);
         assert_eq!(rhs, fp_square(&pub_aff.y));
+    }
+
+    /// 验证完备加法公式的退化情况（常量时间 add 的正确性）
+    #[test]
+    fn test_add_degenerate_cases() {
+        let g = JacobianPoint::from_affine(&AffinePoint::generator());
+        let inf = JacobianPoint::INFINITY;
+
+        // ∞ + G = G
+        let r = JacobianPoint::add(&inf, &g).to_affine().unwrap();
+        assert_eq!(fp_to_bytes(&r.x), fp_to_bytes(&GX), "∞ + G 的 x 坐标错误");
+        assert_eq!(fp_to_bytes(&r.y), fp_to_bytes(&GY), "∞ + G 的 y 坐标错误");
+
+        // G + ∞ = G
+        let r = JacobianPoint::add(&g, &inf).to_affine().unwrap();
+        assert_eq!(fp_to_bytes(&r.x), fp_to_bytes(&GX), "G + ∞ 的 x 坐标错误");
+
+        // G + G = 2G（通过 add 和 double 各算一次，结果应相同）
+        let add_gg = JacobianPoint::add(&g, &g).to_affine().unwrap();
+        let double_g = g.double().to_affine().unwrap();
+        assert_eq!(
+            fp_to_bytes(&add_gg.x),
+            fp_to_bytes(&double_g.x),
+            "add(G,G) != double(G) 的 x 坐标"
+        );
+        assert_eq!(
+            fp_to_bytes(&add_gg.y),
+            fp_to_bytes(&double_g.y),
+            "add(G,G) != double(G) 的 y 坐标"
+        );
+
+        // G + (-G) = ∞（互反点，y 取负）
+        let g_neg = JacobianPoint {
+            x: g.x,
+            y: fp_neg(&g.y),
+            z: g.z,
+        };
+        assert!(
+            JacobianPoint::add(&g, &g_neg).is_infinity(),
+            "G + (-G) 应为无穷远点"
+        );
     }
 }
