@@ -98,7 +98,7 @@ impl JacobianPoint {
 
     /// 点倍运算（Jacobian 坐标，a=-3 优化公式，完全常量时间）
     ///
-    /// 公式来自 https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html#doubling-dbl-2001-b
+    /// 公式来自 <https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html#doubling-dbl-2001-b>
     /// SM2 曲线 a = p-3 ≡ -3 (mod p)，使用 a=-3 特化公式降低乘法次数。
     ///
     /// # 安全性
@@ -128,7 +128,11 @@ impl JacobianPoint {
             &double2(&double1(&gamma2)),
         );
 
-        let d = JacobianPoint { x: x3, y: y3, z: z3 };
+        let d = JacobianPoint {
+            x: x3,
+            y: y3,
+            z: z3,
+        };
         // Reason: 无穷远点的倍点仍为无穷远点；用掩码选择替代 if 分支，
         //   避免 scalar_mul 热路径中泄露哪些迭代位为前导零。
         JacobianPoint::conditional_select(&d, self, self.ct_is_infinity())
@@ -136,7 +140,7 @@ impl JacobianPoint {
 
     /// 点加运算（完全常量时间，无条件分支）
     ///
-    /// 公式来自 https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html#addition-add-2007-bl
+    /// 公式来自 <https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html#addition-add-2007-bl>
     ///
     /// # 安全性
     /// 采用"计算所有情况 + 掩码选择"策略，消除全部退化情况的条件分支：
@@ -176,7 +180,11 @@ impl JacobianPoint {
         let y3 = fp_sub(&fp_mul(&r, &fp_sub(&u1h2, &x3)), &fp_mul(&s1, &h3));
         // Z3 = H·Z1·Z2  （当 H==0 时 z3=0，即 INFINITY，与下面掩码一致）
         let z3 = fp_mul(&fp_mul(&h, &p.z), &q.z);
-        let normal = JacobianPoint { x: x3, y: y3, z: z3 };
+        let normal = JacobianPoint {
+            x: x3,
+            y: y3,
+            z: z3,
+        };
 
         // 预计算 P==Q 退化情况的结果（无条件执行，结果由掩码决定是否使用）
         let double_p = p.double();
@@ -186,12 +194,12 @@ impl JacobianPoint {
         let result = normal;
         // 优先级 2：P == -Q → INFINITY（h==0 且 r≠0）
         let result = JacobianPoint::conditional_select(
-            &result, &JacobianPoint::INFINITY, h_is_zero & !r_is_zero,
+            &result,
+            &JacobianPoint::INFINITY,
+            h_is_zero & !r_is_zero,
         );
         // 优先级 3：P == Q → double(P)（h==0 且 r==0）
-        let result = JacobianPoint::conditional_select(
-            &result, &double_p, h_is_zero & r_is_zero,
-        );
+        let result = JacobianPoint::conditional_select(&result, &double_p, h_is_zero & r_is_zero);
         // 优先级 4：Q 是无穷远 → P（加法单位元）
         let result = JacobianPoint::conditional_select(&result, p, q.ct_is_infinity());
         // 优先级 5（最高）：P 是无穷远 → Q
@@ -250,6 +258,7 @@ fn double2(a: &Fp) -> Fp {
 /// - X1·Z2² 简化为 X1（0 次乘法）
 /// - Y1·Z2³ 简化为 Y1（0 次乘法）
 /// - Z3 中的 Z2 乘法（Z3 = H·Z1，而非 H·Z1·Z2）
+///
 /// 共节省约 3~4 次域乘法，用于预计算表构建和 multi_scalar_mul 内循环。
 ///
 /// # 安全性
@@ -258,10 +267,10 @@ fn add_mixed(p: &JacobianPoint, q: &AffinePoint) -> JacobianPoint {
     use subtle::ConstantTimeEq;
 
     // Z_Q = 1，故 u1 = X1，s1 = Y1（无需额外乘法）
-    let z1sq = fp_square(&p.z);           // Z1²
-    let z1cu = fp_mul(&p.z, &z1sq);       // Z1³
-    let u2   = fp_mul(&q.x, &z1sq);       // X2·Z1²
-    let s2   = fp_mul(&q.y, &z1cu);       // Y2·Z1³
+    let z1sq = fp_square(&p.z); // Z1²
+    let z1cu = fp_mul(&p.z, &z1sq); // Z1³
+    let u2 = fp_mul(&q.x, &z1sq); // X2·Z1²
+    let s2 = fp_mul(&q.y, &z1cu); // Y2·Z1³
 
     let h = fp_sub(&u2, &p.x);
     let r = fp_sub(&s2, &p.y);
@@ -269,28 +278,29 @@ fn add_mixed(p: &JacobianPoint, q: &AffinePoint) -> JacobianPoint {
     let h_is_zero = fp_to_bytes(&h).ct_eq(&[0u8; 32]);
     let r_is_zero = fp_to_bytes(&r).ct_eq(&[0u8; 32]);
 
-    let h2   = fp_square(&h);
-    let h3   = fp_mul(&h, &h2);
+    let h2 = fp_square(&h);
+    let h3 = fp_mul(&h, &h2);
     let u1h2 = fp_mul(&p.x, &h2);
 
     let x3 = fp_sub(&fp_sub(&fp_square(&r), &h3), &double1(&u1h2));
-    let y3 = fp_sub(
-        &fp_mul(&r, &fp_sub(&u1h2, &x3)),
-        &fp_mul(&p.y, &h3),
-    );
+    let y3 = fp_sub(&fp_mul(&r, &fp_sub(&u1h2, &x3)), &fp_mul(&p.y, &h3));
     // Reason: Z_Q = 1，故 Z3 = H·Z1·Z2 = H·Z1，节省一次乘法
     let z3 = fp_mul(&h, &p.z);
-    let normal = JacobianPoint { x: x3, y: y3, z: z3 };
+    let normal = JacobianPoint {
+        x: x3,
+        y: y3,
+        z: z3,
+    };
 
     let double_p = p.double();
 
     let result = normal;
     let result = JacobianPoint::conditional_select(
-        &result, &JacobianPoint::INFINITY, h_is_zero & !r_is_zero,
+        &result,
+        &JacobianPoint::INFINITY,
+        h_is_zero & !r_is_zero,
     );
-    let result = JacobianPoint::conditional_select(
-        &result, &double_p, h_is_zero & r_is_zero,
-    );
+    let result = JacobianPoint::conditional_select(&result, &double_p, h_is_zero & r_is_zero);
     // P = INFINITY → 返回 Q（注：预计算表中 Q 绝不是无穷远点，
     //   但在通用调用中仍需正确处理）
     let q_jac = JacobianPoint::from_affine(q);
@@ -328,7 +338,7 @@ fn scalar_mul_g_window(k: &U256) -> JacobianPoint {
         for _ in 0..4 {
             result = result.double();
         }
-        let window = (byte >> 4) as u8;
+        let window = byte >> 4;
         // 常量时间表查找：遍历 1..=15，用 ct_eq 选出 table[window]
         let mut sel = JacobianPoint::INFINITY;
         for j in 1u8..=15 {
@@ -592,6 +602,9 @@ mod tests {
             y: fp_neg(&g.y),
             z: g.z,
         };
-        assert!(JacobianPoint::add(&g, &g_neg).is_infinity(), "G + (-G) 应为无穷远点");
+        assert!(
+            JacobianPoint::add(&g, &g_neg).is_infinity(),
+            "G + (-G) 应为无穷远点"
+        );
     }
 }

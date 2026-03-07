@@ -63,26 +63,62 @@ pub(super) fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
     // Reason: 将 64 轮分两段展开，消除 ff/gg/T 中的 if 分支。
     // j = 0..15：FF = x^y^z，GG = x^y^z
     for j in 0..16 {
-        let ss1 = a.rotate_left(12).wrapping_add(e).wrapping_add(T[j]).rotate_left(7);
+        let ss1 = a
+            .rotate_left(12)
+            .wrapping_add(e)
+            .wrapping_add(T[j])
+            .rotate_left(7);
         let ss2 = ss1 ^ a.rotate_left(12);
-        let tt1 = (a ^ b ^ c).wrapping_add(d).wrapping_add(ss2).wrapping_add(w[j] ^ w[j + 4]);
-        let tt2 = (e ^ f ^ g).wrapping_add(h).wrapping_add(ss1).wrapping_add(w[j]);
-        d = c; c = b.rotate_left(9); b = a; a = tt1;
-        h = g; g = f.rotate_left(19); f = e; e = p0(tt2);
+        let tt1 = (a ^ b ^ c)
+            .wrapping_add(d)
+            .wrapping_add(ss2)
+            .wrapping_add(w[j] ^ w[j + 4]);
+        let tt2 = (e ^ f ^ g)
+            .wrapping_add(h)
+            .wrapping_add(ss1)
+            .wrapping_add(w[j]);
+        d = c;
+        c = b.rotate_left(9);
+        b = a;
+        a = tt1;
+        h = g;
+        g = f.rotate_left(19);
+        f = e;
+        e = p0(tt2);
     }
 
     // j = 16..63：FF = majority(x,y,z)，GG = choice(x,y,z)
     for j in 16..64 {
-        let ss1 = a.rotate_left(12).wrapping_add(e).wrapping_add(T[j]).rotate_left(7);
+        let ss1 = a
+            .rotate_left(12)
+            .wrapping_add(e)
+            .wrapping_add(T[j])
+            .rotate_left(7);
         let ss2 = ss1 ^ a.rotate_left(12);
         let tt1 = ((a & b) | (a & c) | (b & c))
-            .wrapping_add(d).wrapping_add(ss2).wrapping_add(w[j] ^ w[j + 4]);
+            .wrapping_add(d)
+            .wrapping_add(ss2)
+            .wrapping_add(w[j] ^ w[j + 4]);
         let tt2 = ((e & f) | (!e & g))
-            .wrapping_add(h).wrapping_add(ss1).wrapping_add(w[j]);
-        d = c; c = b.rotate_left(9); b = a; a = tt1;
-        h = g; g = f.rotate_left(19); f = e; e = p0(tt2);
+            .wrapping_add(h)
+            .wrapping_add(ss1)
+            .wrapping_add(w[j]);
+        d = c;
+        c = b.rotate_left(9);
+        b = a;
+        a = tt1;
+        h = g;
+        g = f.rotate_left(19);
+        f = e;
+        e = p0(tt2);
     }
 
-    state[0] ^= a; state[1] ^= b; state[2] ^= c; state[3] ^= d;
-    state[4] ^= e; state[5] ^= f; state[6] ^= g; state[7] ^= h;
+    state[0] ^= a;
+    state[1] ^= b;
+    state[2] ^= c;
+    state[3] ^= d;
+    state[4] ^= e;
+    state[5] ^= f;
+    state[6] ^= g;
+    state[7] ^= h;
 }

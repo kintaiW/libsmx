@@ -1,6 +1,6 @@
 //! SM9 BN256 二次扩域 Fp2
 //!
-//! Fp2 = Fp[u] / (u² + 2)
+//! `Fp2 = Fp[u] / (u² + 2)`
 //! 即 u² = -2
 //!
 //! 元素表示为 a = a0 + a1·u，其中 a0, a1 ∈ Fp
@@ -177,7 +177,6 @@ pub fn fp2_conjugate(a: &Fp2) -> Fp2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sm9::fields::fp::fp_from_bytes;
 
     fn fp2_one() -> Fp2 {
         Fp2::ONE

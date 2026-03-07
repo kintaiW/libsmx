@@ -770,7 +770,7 @@ mod tests {
         );
         // 非 16 倍数
         assert!(
-            sm4_encrypt_xts(&key1, &key2, &tweak, b"not-aligned-data").is_err() == false,
+            sm4_encrypt_xts(&key1, &key2, &tweak, b"not-aligned-data").is_ok(),
             "正好 16 字节不应返回错误"
         );
         assert!(

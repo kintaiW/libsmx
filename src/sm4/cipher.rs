@@ -39,6 +39,7 @@ const CK: [u32; 32] = [
 ///
 /// 仅使用 `&`/`^`/`|`/`!` 位运算，零内存访问，无条件分支。
 /// 每个中间变量为 0 或 1（对应输入字节的各个位平面）。
+#[allow(dead_code)]
 #[inline]
 pub(crate) fn sbox_ct(x: u8) -> u8 {
     // 提取输入字节的 8 个位（b0 = LSB, b7 = MSB）
@@ -53,19 +54,19 @@ pub(crate) fn sbox_ct(x: u8) -> u8 {
 
     // ── 输入线性层（input function）──────────────────────────────────────────
     // Reason: 将输入 8 位映射为中间变量 g0..g7, m0..m9，为 GF(2^4) 求逆做准备。
-    let t1  = b7 ^ b5;
-    let t2  = 1 ^ (b5 ^ b1);   // NOT(b5 ^ b1) = g4
-    let g5  = 1 ^ b0;           // NOT(b0)
-    let t3  = 1 ^ (b0 ^ t2);   // NOT(b0 ^ t2) = m1
-    let t4  = b6 ^ b2;         // m4
-    let t5  = b3 ^ t3;         // g3
-    let t6  = b4 ^ t1;         // m0
-    let t7  = b1 ^ t5;         // g1
-    let t8  = b1 ^ t4;         // m2
-    let t9  = t6 ^ t8;         // m8
-    let t10 = t6 ^ t7;         // g0
-    let t11 = 1 ^ (b3 ^ t1);   // NOT(b3 ^ t1) = m5
-    let t12 = 1 ^ (b6 ^ t9);   // NOT(b6 ^ t9) = m9
+    let t1 = b7 ^ b5;
+    let t2 = 1 ^ (b5 ^ b1); // NOT(b5 ^ b1) = g4
+    let g5 = 1 ^ b0; // NOT(b0)
+    let t3 = 1 ^ (b0 ^ t2); // NOT(b0 ^ t2) = m1
+    let t4 = b6 ^ b2; // m4
+    let t5 = b3 ^ t3; // g3
+    let t6 = b4 ^ t1; // m0
+    let t7 = b1 ^ t5; // g1
+    let t8 = b1 ^ t4; // m2
+    let t9 = t6 ^ t8; // m8
+    let t10 = t6 ^ t7; // g0
+    let t11 = 1 ^ (b3 ^ t1); // NOT(b3 ^ t1) = m5
+    let t12 = 1 ^ (b6 ^ t9); // NOT(b6 ^ t9) = m9
 
     let g0 = t10;
     let g1 = t7;
@@ -87,47 +88,47 @@ pub(crate) fn sbox_ct(x: u8) -> u8 {
 
     // ── Top 函数（GF(2^4) 求逆的输入准备）────────────────────────────────────
     // Reason: 将 16 个中间变量组合为 p0..p3，供 GF(2^2) 中间层使用。
-    let t2t  = m0 & m1;
-    let t3t  = g0 & g4;
-    let t4t  = g3 & g7;
-    let t7t  = g3 | g7;
+    let t2t = m0 & m1;
+    let t3t = g0 & g4;
+    let t4t = g3 & g7;
+    let t7t = g3 | g7;
     let t11t = m4 & m5;
     let t10t = m3 & m2;
     let t12t = m3 | m2;
-    let t6t  = g6 | g2;
-    let t9t  = m6 | m7;
-    let t5t  = m8 & m9;
-    let t8t  = m8 | m9;
+    let t6t = g6 | g2;
+    let t9t = m6 | m7;
+    let t5t = m8 & m9;
+    let t8t = m8 | m9;
     let t14t = t3t ^ t2t;
     let t16t = t5t ^ t14t;
     let t20t = t16t ^ t7t;
     let t17t = t9t ^ t10t;
     let t18t = t11t ^ t12t;
-    let p2   = t20t ^ t18t;
-    let p0   = t6t ^ t16t;
-    let t1t  = g5 & g1;
+    let p2 = t20t ^ t18t;
+    let p0 = t6t ^ t16t;
+    let t1t = g5 & g1;
     let t13t = t1t ^ t2t;
     let t15t = t13t ^ t4t;
-    let p3   = (t6t ^ t15t) ^ t17t;
-    let p1   = t8t ^ t15t;
+    let p3 = (t6t ^ t15t) ^ t17t;
+    let p1 = t8t ^ t15t;
 
     // ── Middle 函数（GF(2^2) 求逆）───────────────────────────────────────────
     // Reason: 在 GF(2^2) 上对 (p0,p1,p2,p3) 组成的元素进行求逆，输出 l0..l3。
-    let t0m  = p1 & p2;
-    let t1m  = p3 & p0;
-    let t2m  = p0 & p2;
-    let t3m  = p1 & p3;
-    let t4m  = t0m & t2m;
-    let t5m  = t1m ^ t3m;
-    let t6m  = t5m | p0;
-    let t7m  = t2m | p3;
-    let l3   = t4m ^ t6m;
-    let t9m  = t7m ^ t3m;
-    let l0   = t0m ^ t9m;
+    let t0m = p1 & p2;
+    let t1m = p3 & p0;
+    let t2m = p0 & p2;
+    let t3m = p1 & p3;
+    let t4m = t0m & t2m;
+    let t5m = t1m ^ t3m;
+    let t6m = t5m | p0;
+    let t7m = t2m | p3;
+    let l3 = t4m ^ t6m;
+    let t9m = t7m ^ t3m;
+    let l0 = t0m ^ t9m;
     let t11m = p2 | t5m;
-    let l1   = t11m ^ t1m;
+    let l1 = t11m ^ t1m;
     let t12m = p1 | t2m;
-    let l2   = t12m ^ t5m;
+    let l2 = t12m ^ t5m;
 
     // ── Bottom 函数（GF(2^4) 求逆的输出组合）─────────────────────────────────
     // Reason: 将 l0..l3 与输入中间变量结合，得到 r0..r11（12 个中间结果）。
@@ -137,42 +138,59 @@ pub(crate) fn sbox_ct(x: u8) -> u8 {
     let k0 = l0 ^ l1;
     let k1 = k2 ^ k3;
 
-    let e0  = m1 & k0;  let e1  = g5 & l1;  let r0  = e0 ^ e1;
-    let e2  = g4 & l0;  let r1  = e2 ^ e1;
-    let e3  = m7 & k3;  let e4  = m5 & k2;  let r2  = e3 ^ e4;
-    let e5  = m3 & k1;  let r3  = e5 ^ e4;
-    let e6  = m9 & k4;  let e7  = g7 & l3;  let r4  = e6 ^ e7;
-    let e8  = g6 & l2;  let r5  = e8 ^ e7;
-    let e9  = m0 & k0;  let e10 = g1 & l1;  let r6  = e9  ^ e10;
-    let e11 = g0 & l0;  let r7  = e11 ^ e10;
-    let e12 = m6 & k3;  let e13 = m4 & k2;  let r8  = e12 ^ e13;
-    let e14 = m2 & k1;  let r9  = e14 ^ e13;
-    let e15 = m8 & k4;  let e16 = g3 & l3;  let r10 = e15 ^ e16;
-    let e17 = g2 & l2;  let r11 = e17 ^ e16;
+    let e0 = m1 & k0;
+    let e1 = g5 & l1;
+    let r0 = e0 ^ e1;
+    let e2 = g4 & l0;
+    let r1 = e2 ^ e1;
+    let e3 = m7 & k3;
+    let e4 = m5 & k2;
+    let r2 = e3 ^ e4;
+    let e5 = m3 & k1;
+    let r3 = e5 ^ e4;
+    let e6 = m9 & k4;
+    let e7 = g7 & l3;
+    let r4 = e6 ^ e7;
+    let e8 = g6 & l2;
+    let r5 = e8 ^ e7;
+    let e9 = m0 & k0;
+    let e10 = g1 & l1;
+    let r6 = e9 ^ e10;
+    let e11 = g0 & l0;
+    let r7 = e11 ^ e10;
+    let e12 = m6 & k3;
+    let e13 = m4 & k2;
+    let r8 = e12 ^ e13;
+    let e14 = m2 & k1;
+    let r9 = e14 ^ e13;
+    let e15 = m8 & k4;
+    let e16 = g3 & l3;
+    let r10 = e15 ^ e16;
+    let e17 = g2 & l2;
+    let r11 = e17 ^ e16;
 
     // ── 输出线性层（output function）──────────────────────────────────────────
     // Reason: 将 r0..r11 组合为输出字节的 8 个位。
-    let t1o  = r7 ^ r9;
-    let t2o  = r1 ^ t1o;
-    let t3o  = r3 ^ t2o;
-    let t4o  = r5 ^ r3;
-    let t5o  = r4 ^ t4o;
-    let t6o  = r0 ^ r4;
-    let t7o  = r11 ^ r7;
+    let t1o = r7 ^ r9;
+    let t2o = r1 ^ t1o;
+    let t3o = r3 ^ t2o;
+    let t4o = r5 ^ r3;
+    let t5o = r4 ^ t4o;
+    let t6o = r0 ^ r4;
+    let t7o = r11 ^ r7;
 
-    let b5o  = t1o ^ t4o;
-    let b2o  = t1o ^ t6o;
+    let b5o = t1o ^ t4o;
+    let b2o = t1o ^ t6o;
     let t10o = r2 ^ t5o;
-    let b3o  = r10 ^ r8;
-    let b1o  = 1 ^ (t3o ^ b3o);
-    let b6o  = t10o ^ b1o;
-    let b4o  = 1 ^ (t3o ^ t7o);
-    let b0o  = t6o ^ b4o;
-    let b7o  = 1 ^ (r10 ^ r6);
+    let b3o = r10 ^ r8;
+    let b1o = 1 ^ (t3o ^ b3o);
+    let b6o = t10o ^ b1o;
+    let b4o = 1 ^ (t3o ^ t7o);
+    let b0o = t6o ^ b4o;
+    let b7o = 1 ^ (r10 ^ r6);
 
     // 将 8 个输出位重组为字节
-    b0o | (b1o << 1) | (b2o << 2) | (b3o << 3)
-        | (b4o << 4) | (b5o << 5) | (b6o << 6) | (b7o << 7)
+    b0o | (b1o << 1) | (b2o << 2) | (b3o << 3) | (b4o << 4) | (b5o << 5) | (b6o << 6) | (b7o << 7)
 }
 
 /// SM4 τ 变换：4 字节 u32 一次性位切片 S-box（常量时间，4-way 并行）
@@ -197,8 +215,8 @@ fn tau(a: u32) -> u32 {
     // Reason: 打包后每个 u32 变量的 bit-j 对应第 j 个字节的该位面，
     //   XOR/AND/OR 在 4 个独立"通道"上并行执行，语义不变。
     let mut bits = [0u32; 8];
-    for i in 0..8usize {
-        bits[i] = ((bytes[0] >> i) & 1) as u32
+    for (i, bit) in bits.iter_mut().enumerate() {
+        *bit = ((bytes[0] >> i) & 1) as u32
             | (((bytes[1] >> i) & 1) as u32) << 1
             | (((bytes[2] >> i) & 1) as u32) << 2
             | (((bytes[3] >> i) & 1) as u32) << 3;
@@ -208,75 +226,136 @@ fn tau(a: u32) -> u32 {
     // ── S-box 布尔电路（与 sbox_ct 完全相同，1 → 0xF）────────────────────
     // Reason: sbox_ct 用 `1 ^ x` 表示 NOT；此处 4 通道并行故改为 `0xF ^ x`，
     //   使 4 个 bit 位置都被正确取反，其余位运算（^/&/|）无需修改。
-    let t1  = b7 ^ b5;
-    let t2  = 0xF ^ (b5 ^ b1);
-    let g5  = 0xF ^ b0;
-    let t3  = 0xF ^ (b0 ^ t2);
-    let t4  = b6 ^ b2;
-    let t5  = b3 ^ t3;
-    let t6  = b4 ^ t1;
-    let t7  = b1 ^ t5;
-    let t8  = b1 ^ t4;
-    let t9  = t6 ^ t8;
+    let t1 = b7 ^ b5;
+    let t2 = 0xF ^ (b5 ^ b1);
+    let g5 = 0xF ^ b0;
+    let t3 = 0xF ^ (b0 ^ t2);
+    let t4 = b6 ^ b2;
+    let t5 = b3 ^ t3;
+    let t6 = b4 ^ t1;
+    let t7 = b1 ^ t5;
+    let t8 = b1 ^ t4;
+    let t9 = t6 ^ t8;
     let t10 = t6 ^ t7;
     let t11 = 0xF ^ (b3 ^ t1);
     let t12 = 0xF ^ (b6 ^ t9);
 
-    let g0 = t10; let g1 = t7; let g2 = t4 ^ t10; let g3 = t5;
-    let g4 = t2; let g6 = t11 ^ t2; let g7 = t12 ^ (t11 ^ t2);
-    let m0 = t6; let m1 = t3; let m2 = t8; let m3 = t3 ^ t12;
-    let m4 = t4; let m5 = t11; let m6 = b1; let m7 = t11 ^ m3;
-    let m8 = t9; let m9 = t12;
+    let g0 = t10;
+    let g1 = t7;
+    let g2 = t4 ^ t10;
+    let g3 = t5;
+    let g4 = t2;
+    let g6 = t11 ^ t2;
+    let g7 = t12 ^ (t11 ^ t2);
+    let m0 = t6;
+    let m1 = t3;
+    let m2 = t8;
+    let m3 = t3 ^ t12;
+    let m4 = t4;
+    let m5 = t11;
+    let m6 = b1;
+    let m7 = t11 ^ m3;
+    let m8 = t9;
+    let m9 = t12;
 
-    let t2t  = m0 & m1; let t3t  = g0 & g4; let t4t  = g3 & g7;
-    let t7t  = g3 | g7; let t11t = m4 & m5; let t10t = m3 & m2;
-    let t12t = m3 | m2; let t6t  = g6 | g2; let t9t  = m6 | m7;
-    let t5t  = m8 & m9; let t8t  = m8 | m9;
-    let t14t = t3t ^ t2t; let t16t = t5t ^ t14t; let t20t = t16t ^ t7t;
-    let t17t = t9t ^ t10t; let t18t = t11t ^ t12t;
-    let p2   = t20t ^ t18t; let p0 = t6t ^ t16t;
-    let t1t  = g5 & g1; let t13t = t1t ^ t2t; let t15t = t13t ^ t4t;
-    let p3   = (t6t ^ t15t) ^ t17t; let p1 = t8t ^ t15t;
+    let t2t = m0 & m1;
+    let t3t = g0 & g4;
+    let t4t = g3 & g7;
+    let t7t = g3 | g7;
+    let t11t = m4 & m5;
+    let t10t = m3 & m2;
+    let t12t = m3 | m2;
+    let t6t = g6 | g2;
+    let t9t = m6 | m7;
+    let t5t = m8 & m9;
+    let t8t = m8 | m9;
+    let t14t = t3t ^ t2t;
+    let t16t = t5t ^ t14t;
+    let t20t = t16t ^ t7t;
+    let t17t = t9t ^ t10t;
+    let t18t = t11t ^ t12t;
+    let p2 = t20t ^ t18t;
+    let p0 = t6t ^ t16t;
+    let t1t = g5 & g1;
+    let t13t = t1t ^ t2t;
+    let t15t = t13t ^ t4t;
+    let p3 = (t6t ^ t15t) ^ t17t;
+    let p1 = t8t ^ t15t;
 
-    let t0m  = p1 & p2; let t1m = p3 & p0; let t2m = p0 & p2;
-    let t3m  = p1 & p3; let t4m = t0m & t2m; let t5m = t1m ^ t3m;
-    let t6m  = t5m | p0; let t7m = t2m | p3;
-    let l3   = t4m ^ t6m; let t9m = t7m ^ t3m; let l0 = t0m ^ t9m;
-    let t11m = p2 | t5m;  let l1 = t11m ^ t1m;
-    let t12m = p1 | t2m;  let l2 = t12m ^ t5m;
+    let t0m = p1 & p2;
+    let t1m = p3 & p0;
+    let t2m = p0 & p2;
+    let t3m = p1 & p3;
+    let t4m = t0m & t2m;
+    let t5m = t1m ^ t3m;
+    let t6m = t5m | p0;
+    let t7m = t2m | p3;
+    let l3 = t4m ^ t6m;
+    let t9m = t7m ^ t3m;
+    let l0 = t0m ^ t9m;
+    let t11m = p2 | t5m;
+    let l1 = t11m ^ t1m;
+    let t12m = p1 | t2m;
+    let l2 = t12m ^ t5m;
 
-    let k4 = l2 ^ l3; let k3 = l1 ^ l3; let k2 = l0 ^ l2;
-    let k0 = l0 ^ l1; let k1 = k2 ^ k3;
+    let k4 = l2 ^ l3;
+    let k3 = l1 ^ l3;
+    let k2 = l0 ^ l2;
+    let k0 = l0 ^ l1;
+    let k1 = k2 ^ k3;
 
-    let e0  = m1 & k0; let e1  = g5 & l1; let r0  = e0 ^ e1;
-    let e2  = g4 & l0; let r1  = e2 ^ e1;
-    let e3  = m7 & k3; let e4  = m5 & k2; let r2  = e3 ^ e4;
-    let e5  = m3 & k1; let r3  = e5 ^ e4;
-    let e6  = m9 & k4; let e7  = g7 & l3; let r4  = e6 ^ e7;
-    let e8  = g6 & l2; let r5  = e8 ^ e7;
-    let e9  = m0 & k0; let e10 = g1 & l1; let r6  = e9  ^ e10;
-    let e11 = g0 & l0; let r7  = e11 ^ e10;
-    let e12 = m6 & k3; let e13 = m4 & k2; let r8  = e12 ^ e13;
-    let e14 = m2 & k1; let r9  = e14 ^ e13;
-    let e15 = m8 & k4; let e16 = g3 & l3; let r10 = e15 ^ e16;
-    let e17 = g2 & l2; let r11 = e17 ^ e16;
+    let e0 = m1 & k0;
+    let e1 = g5 & l1;
+    let r0 = e0 ^ e1;
+    let e2 = g4 & l0;
+    let r1 = e2 ^ e1;
+    let e3 = m7 & k3;
+    let e4 = m5 & k2;
+    let r2 = e3 ^ e4;
+    let e5 = m3 & k1;
+    let r3 = e5 ^ e4;
+    let e6 = m9 & k4;
+    let e7 = g7 & l3;
+    let r4 = e6 ^ e7;
+    let e8 = g6 & l2;
+    let r5 = e8 ^ e7;
+    let e9 = m0 & k0;
+    let e10 = g1 & l1;
+    let r6 = e9 ^ e10;
+    let e11 = g0 & l0;
+    let r7 = e11 ^ e10;
+    let e12 = m6 & k3;
+    let e13 = m4 & k2;
+    let r8 = e12 ^ e13;
+    let e14 = m2 & k1;
+    let r9 = e14 ^ e13;
+    let e15 = m8 & k4;
+    let e16 = g3 & l3;
+    let r10 = e15 ^ e16;
+    let e17 = g2 & l2;
+    let r11 = e17 ^ e16;
 
-    let t1o  = r7 ^ r9;  let t2o = r1 ^ t1o; let t3o = r3 ^ t2o;
-    let t4o  = r5 ^ r3;  let t5o = r4 ^ t4o; let t6o = r0 ^ r4;
-    let t7o  = r11 ^ r7;
-    let b5o  = t1o ^ t4o; let b2o = t1o ^ t6o; let t10o = r2 ^ t5o;
-    let b3o  = r10 ^ r8;
-    let b1o  = 0xF ^ (t3o ^ b3o);
-    let b6o  = t10o ^ b1o;
-    let b4o  = 0xF ^ (t3o ^ t7o);
-    let b0o  = t6o ^ b4o;
-    let b7o  = 0xF ^ (r10 ^ r6);
+    let t1o = r7 ^ r9;
+    let t2o = r1 ^ t1o;
+    let t3o = r3 ^ t2o;
+    let t4o = r5 ^ r3;
+    let t5o = r4 ^ t4o;
+    let t6o = r0 ^ r4;
+    let t7o = r11 ^ r7;
+    let b5o = t1o ^ t4o;
+    let b2o = t1o ^ t6o;
+    let t10o = r2 ^ t5o;
+    let b3o = r10 ^ r8;
+    let b1o = 0xF ^ (t3o ^ b3o);
+    let b6o = t10o ^ b1o;
+    let b4o = 0xF ^ (t3o ^ t7o);
+    let b0o = t6o ^ b4o;
+    let b7o = 0xF ^ (r10 ^ r6);
 
     // ── 解包：8 个 u32 低 4 位 → 4 个输出字节 ──────────────────────────────
     let ob = [b0o, b1o, b2o, b3o, b4o, b5o, b6o, b7o];
     let mut out = [0u8; 4];
-    for i in 0..8usize {
-        let v = ob[i];
+    for (i, &v) in ob.iter().enumerate() {
         out[0] |= ((v & 1) as u8) << i;
         out[1] |= (((v >> 1) & 1) as u8) << i;
         out[2] |= (((v >> 2) & 1) as u8) << i;
