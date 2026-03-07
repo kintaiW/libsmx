@@ -21,7 +21,7 @@ If you discover a security vulnerability in libsmx, please report it responsibly
 
 **Response timeline**:
 
-本项目由个人维护，响应时间不设固定期限。作者会尽快处理所有安全报告，但无法承诺具体的响应时间。
+This project is maintained by an individual. No fixed response time is guaranteed. The author will handle all security reports as soon as possible, but cannot commit to specific timelines.
 
 ## Scope
 

@@ -44,4 +44,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - XTS: reject non-16-byte-aligned input instead of silently truncating
 - SM9 `hash_to_range`: replaced variable-iteration `while` loop with constant-time conditional select
 
-[0.1.0]: https://github.com/aspect-building/libsmx/releases/tag/v0.1.0
+[0.1.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.0
