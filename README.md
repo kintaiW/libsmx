@@ -1,7 +1,9 @@
 # libsmx
 
+[![CI](https://github.com/kintaiW/libsmx/actions/workflows/ci.yml/badge.svg)](https://github.com/kintaiW/libsmx/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/libsmx.svg)](https://crates.io/crates/libsmx)
 [![docs.rs](https://img.shields.io/docsrs/libsmx)](https://docs.rs/libsmx)
+[![codecov](https://codecov.io/gh/kintaiW/libsmx/graph/badge.svg)](https://codecov.io/gh/kintaiW/libsmx)
 [![License](https://img.shields.io/crates/l/libsmx.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.72.0-blue.svg)](https://blog.rust-lang.org/2023/08/24/Rust-1.72.0.html)
 

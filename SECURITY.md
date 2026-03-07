@@ -20,9 +20,8 @@ If you discover a security vulnerability in libsmx, please report it responsibly
 - Any potential impact assessment
 
 **Response timeline**:
-- Acknowledgment within **48 hours**
-- Initial assessment within **7 days**
-- Fix release within **30 days** for confirmed issues
+
+本项目由个人维护，响应时间不设固定期限。作者会尽快处理所有安全报告，但无法承诺具体的响应时间。
 
 ## Scope
 

@@ -1,0 +1,273 @@
+# =============================================================================
+# libsmx CI/CD 工作流
+# =============================================================================
+# 触发条件：
+#   - main 分支的 push / PR → lint + test + coverage
+#   - v* tag 推送 → 上述全部 + 自动发布
+#   - PR → 额外运行 benchmark 并评论结果
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+# 同一 PR 的新提交自动取消旧的运行，节省 CI 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # 强制使用 sparse 协议，加速 crates.io 索引同步
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+# =============================================================================
+# Job 1: 代码质量检查（格式化 + Clippy + 依赖漏洞扫描）
+# =============================================================================
+jobs:
+  lint:
+    name: Lint & Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链（stable + rustfmt + clippy）
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      - name: 检查代码格式
+        run: cargo fmt --check
+
+      - name: Clippy 检查（默认 features，所有警告视为错误）
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Clippy 检查（no_std，无 alloc）
+        # Reason: alloc-gated 函数在 no_std 模式下会产生 "unused" 假阳性，
+        #         因此只做编译检查，不启用 -D warnings
+        run: cargo check --no-default-features
+
+      - name: 安装 cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: 依赖漏洞扫描（CVE 检查）
+        run: cargo audit
+
+      - name: 安全性扫描（panic/unwrap 检查）
+        run: bash .github/scripts/sanity_check.sh
+        shell: bash
+
+  # =============================================================================
+  # Job 2: 多平台测试矩阵
+  # =============================================================================
+  test-matrix:
+    name: Test (${{ matrix.os }})
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链（stable）
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      # Reason: 在所有平台上显式设置 bash 以统一 Windows/Linux/macOS 行为
+      - name: 运行测试（默认 features = alloc）
+        run: cargo test --all-targets
+        shell: bash
+
+      - name: 运行测试（no_std，无 alloc）
+        # Reason: 验证嵌入式 / WASM / 裸机兼容性
+        run: cargo test --no-default-features --lib
+        shell: bash
+
+      - name: 运行文档测试
+        run: cargo test --doc
+        shell: bash
+
+      - name: 构建文档（警告视为错误）
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        shell: bash
+
+  # =============================================================================
+  # Job 3: MSRV 验证（最低支持版本）
+  # =============================================================================
+  msrv:
+    name: MSRV (1.72.0)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 MSRV 工具链
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.72.0"
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      # Reason: MSRV 只验证能编译，不运行测试（避免 dev-dependencies 兼容问题）
+      - name: 检查编译（默认 features）
+        run: cargo check
+
+      - name: 检查编译（no_std）
+        run: cargo check --no-default-features
+
+  # =============================================================================
+  # Job 4: 测试覆盖率（仅 Linux，上传 Codecov）
+  # =============================================================================
+  coverage:
+    name: Coverage
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链（stable）
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      - name: 安装 cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --locked
+
+      - name: 生成覆盖率报告
+        run: cargo tarpaulin --out xml --output-dir coverage/
+
+      - name: 上传覆盖率到 Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/cobertura.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+        # Reason: fail_ci_if_error=false 避免 Codecov 暂时不可用时阻断 CI
+
+  # =============================================================================
+  # Job 5: 性能回归检测（仅 PR 触发）
+  # =============================================================================
+  benchmark:
+    name: Benchmark
+    if: github.event_name == 'pull_request'
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: 签出 PR 代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链（stable）
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      # Reason: 先运行当前 PR 分支的 benchmark 并保存结果
+      - name: 运行 Benchmark
+        run: cargo bench --bench sm3_bench --bench sm4_bench --bench sm2_bench -- --output-format bencher 2>&1 | tee bench_output.txt
+        shell: bash
+
+      # Reason: 将 benchmark 结果作为 PR 评论发布，方便审查性能变化
+      - name: 发布 Benchmark 结果到 PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const benchOutput = fs.readFileSync('bench_output.txt', 'utf8');
+            const body = `## Benchmark Results\n\n<details>\n<summary>Click to expand</summary>\n\n\`\`\`\n${benchOutput}\n\`\`\`\n\n</details>\n\n> Benchmarks ran on \`ubuntu-latest\`. Results may vary across runs.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+  # =============================================================================
+  # Job 6: 自动发布到 crates.io（仅 v* Tag 触发）
+  # =============================================================================
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test-matrix, msrv]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装 Rust 工具链（stable）
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      # Reason: 确保 Git Tag 版本号与 Cargo.toml 中的 version 字段完全一致
+      - name: 验证 Tag 与 Cargo.toml 版本匹配
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
+            exit 1
+          fi
+          echo "Version: $TAG_VERSION ✓"
+        shell: bash
+
+      # Reason: 发布前最后一轮完整测试，防止 tag 推送后才发现问题
+      - name: 发布前完整测试
+        run: cargo test --all-targets
+
+      - name: 发布到 crates.io
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      # Reason: 从 CHANGELOG.md 中提取当前版本的发布说明
+      - name: 提取 Changelog 条目
+        id: changelog
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          # 提取 ## [x.y.z] 到下一个 ## 之间的内容
+          NOTES=$(awk "/^## \\[${TAG_VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release v${TAG_VERSION}"
+          fi
+          # 写入多行输出
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ github.ref_name }}"
+          body: ${{ steps.changelog.outputs.notes }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        # Reason: 如果 tag 包含 '-'（如 v0.4.0-rc1），标记为预发布
