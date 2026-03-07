@@ -186,37 +186,55 @@ pub fn sm4_crypt_ctr(key: &[u8; 16], nonce: &[u8; 16], data: &[u8]) -> Vec<u8> {
 
 // ── GCM ──────────────────────────────────────────────────────────────────────
 
-/// GF(2^128) 乘法（NIST SP 800-38D Algorithm 1，常量时间）
+/// GF(2^128) 乘法（NIST SP 800-38D Algorithm 1，常量时间，u64 优化）
 ///
 /// # 安全性
 /// 使用掩码算术替代秘密依赖的条件分支，消除时序侧信道：
-/// - `mask_xi`：由当前标量位生成的 0x00/0xFF 掩码，替代 `if bit == 1`
-/// - `reduce_mask`：由 LSB 生成的 0x00/0xFF 掩码，替代 `if lsb == 1`
+/// - `mask_xi`：由当前标量位生成的 u64 全掩码，替代 `if bit == 1`
+/// - `reduce_mask`：由 LSB 生成的 u64 全掩码，替代 `if lsb == 1`
+///
+/// # 性能优化
+/// 将内部状态从 `[u8; 16]` 改为 `[u64; 2]`（大端），使每次迭代的
+/// XOR/移位/规约从 16 次字节操作降至 ~6 次 64 位操作，约 4-6× 提速。
 ///
 /// Reason: GHASH 密钥 H 来自 SM4_K(0^128)，属秘密值；原条件分支泄露 H 的汉明重量，
 ///   是 cache-timing 和 branch-timing 攻击的经典目标（参见 Bricout 等 2016）。
+///   u64 向量化保持完全常量时间，同时大幅减少指令数。
 fn gf128_mul(x: &[u8; 16], y: &[u8; 16]) -> [u8; 16] {
-    let mut z = [0u8; 16];
-    let mut v = *y;
-    for byte_xi in x.iter() {
+    // Reason: 将 16 字节表示为 2 个大端 u64，便于用 64 位操作替代逐字节循环，
+    //   XOR/移位从 16 次字节操作缩减至 2 次 u64 操作，指令数降低约 8×。
+    let mut z = [0u64; 2];
+    let mut v = [
+        u64::from_be_bytes(y[0..8].try_into().unwrap()),
+        u64::from_be_bytes(y[8..16].try_into().unwrap()),
+    ];
+
+    for &byte_xi in x.iter() {
         for bit_idx in (0..8).rev() {
-            // Reason: 0u8.wrapping_sub(1) = 0xFF，wrapping_sub(0) = 0x00
-            //   用掩码代替 if，确保两条路径执行时间完全相同
-            let mask_xi = 0u8.wrapping_sub((byte_xi >> bit_idx) & 1);
-            for j in 0..16 {
-                z[j] ^= v[j] & mask_xi;
-            }
-            let lsb = v[15] & 1;
-            for j in (1..16).rev() {
-                v[j] = (v[j] >> 1) | (v[j - 1] << 7);
-            }
+            // Reason: 0u64.wrapping_sub(1) = 0xFFFF...，wrapping_sub(0) = 0x0000...
+            //   单次 u64 掩码覆盖原来 16 次 u8 掩码操作
+            let mask = 0u64.wrapping_sub(((byte_xi >> bit_idx) & 1) as u64);
+            z[0] ^= v[0] & mask;
+            z[1] ^= v[1] & mask;
+
+            // GF(2^128) 右移 1 位（= 乘以 x），带规约多项式 x^128+x^7+x^2+x+1
+            // Reason: v[0] 的 bit 0（= 大端第 64 位）移入 v[1] 的 bit 63，
+            //   v[1] 的 bit 0（= GF 元素 x^0 系数）移出后触发规约。
+            let lsb = v[1] & 1;
+            let carry = v[0] & 1;
             v[0] >>= 1;
-            // Reason: 同上，掩码替代 if lsb == 1，消除 GF 规约的秘密依赖分支
-            let reduce_mask = 0u8.wrapping_sub(lsb);
-            v[0] ^= 0xE1 & reduce_mask;
+            v[1] = (v[1] >> 1) | (carry << 63);
+            // Reason: 规约项 0xE1_00...00 对应 x^7+x^2+x+1 写入最高字节（v[0] MSB 端），
+            //   掩码替代 if lsb，执行路径完全相同
+            let reduce_mask = 0u64.wrapping_sub(lsb);
+            v[0] ^= 0xE100_0000_0000_0000u64 & reduce_mask;
         }
     }
-    z
+
+    let mut out = [0u8; 16];
+    out[0..8].copy_from_slice(&z[0].to_be_bytes());
+    out[8..16].copy_from_slice(&z[1].to_be_bytes());
+    out
 }
 
 /// GHASH 认证函数（NIST SP 800-38D §6.4）

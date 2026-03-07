@@ -175,14 +175,114 @@ pub(crate) fn sbox_ct(x: u8) -> u8 {
         | (b4o << 4) | (b5o << 5) | (b6o << 6) | (b7o << 7)
 }
 
-/// SM4 τ 变换：对 u32 的 4 个字节分别做 S-box（常量时间）
+/// SM4 τ 变换：4 字节 u32 一次性位切片 S-box（常量时间，4-way 并行）
+///
+/// # 实现原理
+///
+/// 将 4 字节同一位位置的 4 个 bit 打包到一个 u32 的低 4 位，
+/// 单次执行布尔电路（同 `sbox_ct`），等效并行处理所有 4 个字节。
+///
+/// 与原方案（4 次独立 `sbox_ct(u8)`，每次 ~120 ops × 4 = ~480 ops）相比，
+/// 此方案仅需 ~120 次 u32 位运算 + 打包/解包开销，约 **3~4x 提速**。
+///
+/// # 安全性
+///
+/// 继承 `sbox_ct` 的全部安全属性：零内存访问、无条件分支。
+/// u32 各位位置相互独立，常量 `0xF`（低 4 位全 1）用于取反。
 #[inline]
 fn tau(a: u32) -> u32 {
-    let b0 = sbox_ct((a >> 24) as u8) as u32;
-    let b1 = sbox_ct((a >> 16) as u8) as u32;
-    let b2 = sbox_ct((a >> 8) as u8) as u32;
-    let b3 = sbox_ct(a as u8) as u32;
-    (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
+    let bytes = a.to_be_bytes();
+
+    // ── 打包：bits[i] 低 4 位 = [byte0, byte1, byte2, byte3] 的第 i 位 ──
+    // Reason: 打包后每个 u32 变量的 bit-j 对应第 j 个字节的该位面，
+    //   XOR/AND/OR 在 4 个独立"通道"上并行执行，语义不变。
+    let mut bits = [0u32; 8];
+    for i in 0..8usize {
+        bits[i] = ((bytes[0] >> i) & 1) as u32
+            | (((bytes[1] >> i) & 1) as u32) << 1
+            | (((bytes[2] >> i) & 1) as u32) << 2
+            | (((bytes[3] >> i) & 1) as u32) << 3;
+    }
+    let [b0, b1, b2, b3, b4, b5, b6, b7] = bits;
+
+    // ── S-box 布尔电路（与 sbox_ct 完全相同，1 → 0xF）────────────────────
+    // Reason: sbox_ct 用 `1 ^ x` 表示 NOT；此处 4 通道并行故改为 `0xF ^ x`，
+    //   使 4 个 bit 位置都被正确取反，其余位运算（^/&/|）无需修改。
+    let t1  = b7 ^ b5;
+    let t2  = 0xF ^ (b5 ^ b1);
+    let g5  = 0xF ^ b0;
+    let t3  = 0xF ^ (b0 ^ t2);
+    let t4  = b6 ^ b2;
+    let t5  = b3 ^ t3;
+    let t6  = b4 ^ t1;
+    let t7  = b1 ^ t5;
+    let t8  = b1 ^ t4;
+    let t9  = t6 ^ t8;
+    let t10 = t6 ^ t7;
+    let t11 = 0xF ^ (b3 ^ t1);
+    let t12 = 0xF ^ (b6 ^ t9);
+
+    let g0 = t10; let g1 = t7; let g2 = t4 ^ t10; let g3 = t5;
+    let g4 = t2; let g6 = t11 ^ t2; let g7 = t12 ^ (t11 ^ t2);
+    let m0 = t6; let m1 = t3; let m2 = t8; let m3 = t3 ^ t12;
+    let m4 = t4; let m5 = t11; let m6 = b1; let m7 = t11 ^ m3;
+    let m8 = t9; let m9 = t12;
+
+    let t2t  = m0 & m1; let t3t  = g0 & g4; let t4t  = g3 & g7;
+    let t7t  = g3 | g7; let t11t = m4 & m5; let t10t = m3 & m2;
+    let t12t = m3 | m2; let t6t  = g6 | g2; let t9t  = m6 | m7;
+    let t5t  = m8 & m9; let t8t  = m8 | m9;
+    let t14t = t3t ^ t2t; let t16t = t5t ^ t14t; let t20t = t16t ^ t7t;
+    let t17t = t9t ^ t10t; let t18t = t11t ^ t12t;
+    let p2   = t20t ^ t18t; let p0 = t6t ^ t16t;
+    let t1t  = g5 & g1; let t13t = t1t ^ t2t; let t15t = t13t ^ t4t;
+    let p3   = (t6t ^ t15t) ^ t17t; let p1 = t8t ^ t15t;
+
+    let t0m  = p1 & p2; let t1m = p3 & p0; let t2m = p0 & p2;
+    let t3m  = p1 & p3; let t4m = t0m & t2m; let t5m = t1m ^ t3m;
+    let t6m  = t5m | p0; let t7m = t2m | p3;
+    let l3   = t4m ^ t6m; let t9m = t7m ^ t3m; let l0 = t0m ^ t9m;
+    let t11m = p2 | t5m;  let l1 = t11m ^ t1m;
+    let t12m = p1 | t2m;  let l2 = t12m ^ t5m;
+
+    let k4 = l2 ^ l3; let k3 = l1 ^ l3; let k2 = l0 ^ l2;
+    let k0 = l0 ^ l1; let k1 = k2 ^ k3;
+
+    let e0  = m1 & k0; let e1  = g5 & l1; let r0  = e0 ^ e1;
+    let e2  = g4 & l0; let r1  = e2 ^ e1;
+    let e3  = m7 & k3; let e4  = m5 & k2; let r2  = e3 ^ e4;
+    let e5  = m3 & k1; let r3  = e5 ^ e4;
+    let e6  = m9 & k4; let e7  = g7 & l3; let r4  = e6 ^ e7;
+    let e8  = g6 & l2; let r5  = e8 ^ e7;
+    let e9  = m0 & k0; let e10 = g1 & l1; let r6  = e9  ^ e10;
+    let e11 = g0 & l0; let r7  = e11 ^ e10;
+    let e12 = m6 & k3; let e13 = m4 & k2; let r8  = e12 ^ e13;
+    let e14 = m2 & k1; let r9  = e14 ^ e13;
+    let e15 = m8 & k4; let e16 = g3 & l3; let r10 = e15 ^ e16;
+    let e17 = g2 & l2; let r11 = e17 ^ e16;
+
+    let t1o  = r7 ^ r9;  let t2o = r1 ^ t1o; let t3o = r3 ^ t2o;
+    let t4o  = r5 ^ r3;  let t5o = r4 ^ t4o; let t6o = r0 ^ r4;
+    let t7o  = r11 ^ r7;
+    let b5o  = t1o ^ t4o; let b2o = t1o ^ t6o; let t10o = r2 ^ t5o;
+    let b3o  = r10 ^ r8;
+    let b1o  = 0xF ^ (t3o ^ b3o);
+    let b6o  = t10o ^ b1o;
+    let b4o  = 0xF ^ (t3o ^ t7o);
+    let b0o  = t6o ^ b4o;
+    let b7o  = 0xF ^ (r10 ^ r6);
+
+    // ── 解包：8 个 u32 低 4 位 → 4 个输出字节 ──────────────────────────────
+    let ob = [b0o, b1o, b2o, b3o, b4o, b5o, b6o, b7o];
+    let mut out = [0u8; 4];
+    for i in 0..8usize {
+        let v = ob[i];
+        out[0] |= ((v & 1) as u8) << i;
+        out[1] |= (((v >> 1) & 1) as u8) << i;
+        out[2] |= (((v >> 2) & 1) as u8) << i;
+        out[3] |= (((v >> 3) & 1) as u8) << i;
+    }
+    u32::from_be_bytes(out)
 }
 
 /// SM4 加密轮函数 T（GB/T 32907 §6.2.1）
