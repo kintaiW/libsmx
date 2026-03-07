@@ -37,13 +37,10 @@ echo "--- 检查 panic/unwrap/expect ---"
 #   - benches/ 和 tests/ 目录
 #   - 白名单：try_into().unwrap() 用于固定大小切片转换（已知安全）
 
-# 收集 src/ 下所有非测试 .rs 文件中的匹配项
-PANIC_HITS=$(grep -rn 'panic!\|\.unwrap()\|\.expect(' src/ --include='*.rs' \
-  | grep -v '#\[cfg(test)\]' \
-  | grep -v 'mod tests' \
-  | grep -v '// test' \
-  | grep -v '#\[test\]' \
-  | grep -v 'fn test_' \
+# Reason: 逐行 grep -v 无法排除 #[cfg(test)] 块内部的代码，
+#   改用 awk 先将每个文件中 #[cfg(test)] 之后的行全部剥离，再 grep。
+PANIC_HITS=$(find src/ -name '*.rs' -exec awk '/#\[cfg\(test\)\]/{exit} {print FILENAME":"NR":"$0}' {} \; \
+  | grep 'panic!\|\.unwrap()\|\.expect(' \
   || true)
 
 if [ -n "$PANIC_HITS" ]; then
@@ -89,11 +86,8 @@ echo "--- 检查硬编码敏感信息 ---"
 
 # Reason: 防止私钥、密码等敏感信息被提交到仓库
 SENSITIVE_PATTERNS='(private.?key|secret.?key|password|passwd|api.?key|token)\s*=\s*["\x27][^\x27"]+["\x27]'
-SENSITIVE_HITS=$(grep -rniE "$SENSITIVE_PATTERNS" src/ --include='*.rs' \
-  | grep -v '#\[cfg(test)\]' \
-  | grep -v 'mod tests' \
-  | grep -v '// test' \
-  | grep -v 'fn test_' \
+SENSITIVE_HITS=$(find src/ -name '*.rs' -exec awk '/#\[cfg\(test\)\]/{exit} {print FILENAME":"NR":"$0}' {} \; \
+  | grep -iE "$SENSITIVE_PATTERNS" \
   || true)
 
 if [ -n "$SENSITIVE_HITS" ]; then
@@ -132,11 +126,10 @@ fi
 echo ""
 echo "--- 检查 unsafe 代码 ---"
 
-UNSAFE_HITS=$(grep -rn 'unsafe' src/ --include='*.rs' \
+UNSAFE_HITS=$(find src/ -name '*.rs' -exec awk '/#\[cfg\(test\)\]/{exit} {print FILENAME":"NR":"$0}' {} \; \
+  | grep 'unsafe' \
   | grep -v '#!\[forbid(unsafe_code)\]' \
   | grep -v '// unsafe' \
-  | grep -v '#\[cfg(test)\]' \
-  | grep -v 'mod tests' \
   || true)
 
 if [ -n "$UNSAFE_HITS" ]; then
@@ -152,7 +145,7 @@ fi
 echo ""
 echo "=========================================="
 if [ "$ERRORS" -gt 0 ]; then
-  echo -e "  ${RED}发现 $ERRORS 个错��！${NC}"
+  echo -e "  ${RED}发现 $ERRORS 个错误！${NC}"
   echo "=========================================="
   exit 1
 else
