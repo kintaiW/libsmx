@@ -265,11 +265,22 @@ mod tests {
     // 辅助：从十六进制字符串构造 [u8; 32]
     fn hex_literal(s: &str) -> [u8; 32] {
         let mut out = [0u8; 32];
-        let bytes: alloc::vec::Vec<u8> = (0..s.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
-            .collect();
-        out.copy_from_slice(&bytes);
+        let b = s.as_bytes();
+        for i in 0..32 {
+            let hi = match b[i * 2] {
+                c @ b'0'..=b'9' => c - b'0',
+                c @ b'a'..=b'f' => c - b'a' + 10,
+                c @ b'A'..=b'F' => c - b'A' + 10,
+                _ => panic!("invalid hex"),
+            };
+            let lo = match b[i * 2 + 1] {
+                c @ b'0'..=b'9' => c - b'0',
+                c @ b'a'..=b'f' => c - b'a' + 10,
+                c @ b'A'..=b'F' => c - b'A' + 10,
+                _ => panic!("invalid hex"),
+            };
+            out[i] = hi << 4 | lo;
+        }
         out
     }
 }

@@ -38,6 +38,10 @@
   - SM2 签名：258 µs，验签：316 µs
   - SM9 签名：3.44 ms，验签：5.50 ms
 
+### 变更
+
+- MSRV 提升至 1.83.0（crypto-bigint 0.6.x 的 ConstMontyForm 常量时间 Montgomery 算术所需）
+
 ### 安全
 
 - GCM `gf128_mul`：用掩码运算替换依赖秘密的 `if` 分支

@@ -111,7 +111,7 @@ jobs:
   # Job 3: MSRV 验证（最低支持版本）
   # =============================================================================
   msrv:
-    name: MSRV (1.72.0)
+    name: MSRV (1.83.0)
     needs: lint
     runs-on: ubuntu-latest
     steps:
@@ -121,7 +121,7 @@ jobs:
       - name: 安装 MSRV 工具链
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.72.0"
+          toolchain: "1.83.0"
 
       - name: 缓存 Cargo 编译产物
         uses: Swatinem/rust-cache@v2

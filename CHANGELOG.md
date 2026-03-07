@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - SM2 sign: 258 µs, verify: 316 µs
   - SM9 sign: 3.44 ms, verify: 5.50 ms
 
+### Changed
+
+- MSRV raised to 1.83.0 (required by crypto-bigint 0.6.x for ConstMontyForm constant-time Montgomery arithmetic)
+
 ### Security
 
 - GCM `gf128_mul`: replaced secret-dependent `if` branches with mask arithmetic

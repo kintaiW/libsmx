@@ -654,6 +654,7 @@ pub fn sm4_decrypt_xts(
 // ── 测试 ──────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
+#[cfg(feature = "alloc")]
 mod tests {
     use super::*;
 

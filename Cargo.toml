@@ -2,12 +2,12 @@
 name = "libsmx"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.72.0"
+rust-version = "1.83.0"
 license = "Apache-2.0"
 description = "Pure-Rust, no_std, constant-time SM2/SM3/SM4/SM9 Chinese cryptography (GB/T 32918/32905/32907/38635)"
-repository = "https://github.com/aspect-building/libsmx"
+repository = "https://github.com/kintaiW/libsmx"
 documentation = "https://docs.rs/libsmx"
-homepage = "https://github.com/aspect-building/libsmx"
+homepage = "https://github.com/kintaiW/libsmx"
 categories = ["cryptography", "no-std"]
 keywords = ["sm2", "sm3", "sm4", "sm9", "gmssl"]
 readme = "README.md"

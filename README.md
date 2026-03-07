@@ -5,7 +5,7 @@
 [![docs.rs](https://img.shields.io/docsrs/libsmx)](https://docs.rs/libsmx)
 [![codecov](https://codecov.io/gh/kintaiW/libsmx/graph/badge.svg)](https://codecov.io/gh/kintaiW/libsmx)
 [![License](https://img.shields.io/crates/l/libsmx.svg)](LICENSE)
-[![MSRV](https://img.shields.io/badge/MSRV-1.72.0-blue.svg)](https://blog.rust-lang.org/2023/08/24/Rust-1.72.0.html)
+[![MSRV](https://img.shields.io/badge/MSRV-1.83.0-blue.svg)](https://blog.rust-lang.org/2024/11/28/Rust-1.83.0.html)
 
 Pure-Rust, `#![no_std]` implementation of Chinese commercial cryptography standards with constant-time operations throughout.
 
@@ -211,7 +211,7 @@ cargo bench
 
 ## MSRV Policy
 
-The minimum supported Rust version is **1.72.0**. MSRV bumps are treated as minor version changes.
+The minimum supported Rust version is **1.83.0**. MSRV bumps are treated as minor version changes.
 
 ## License
 
