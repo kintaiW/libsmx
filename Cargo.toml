@@ -1,0 +1,56 @@
+[package]
+name = "libsmx"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.72.0"
+license = "Apache-2.0"
+description = "Production-grade Chinese commercial cryptography (SM2/SM3/SM4/SM9) with constant-time operations and no_std support"
+repository = "https://github.com/your-org/libsmx"
+documentation = "https://docs.rs/libsmx"
+homepage = "https://github.com/your-org/libsmx"
+categories = ["cryptography", "no-std"]
+keywords = ["sm2", "sm3", "sm4", "sm9", "gmssl"]
+exclude = [
+    "benches/",
+    "tests/",
+    "docs/",
+    ".github/",
+    "*.sh",
+]
+
+[lib]
+name = "libsmx"
+path = "src/lib.rs"
+
+[dependencies]
+crypto-bigint = { version = "0.6", default-features = false }
+subtle    = { version = "2.6", default-features = false }
+zeroize   = { version = "1.8", default-features = false, features = ["derive"] }
+rand_core = { version = "0.6", default-features = false }
+
+[features]
+default = ["alloc"]
+alloc = []
+std = ["alloc", "rand_core/std"]
+
+[dev-dependencies]
+hex       = "0.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+rand      = "0.8"
+sm9_core = "0.5.0"
+
+[[bench]]
+name    = "sm2_bench"
+harness = false
+
+[[bench]]
+name    = "sm3_bench"
+harness = false
+
+[[bench]]
+name    = "sm4_bench"
+harness = false
+
+[[bench]]
+name    = "sm9_bench"
+harness = false
