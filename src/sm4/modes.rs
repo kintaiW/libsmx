@@ -411,7 +411,7 @@ fn ccm_cbc_mac(
         let aad_len = aad.len();
         // Reason: CCM AAD 前缀 2 字节长度 + AAD 数据，补零至 16 字节对齐
         let prefix_len = 2 + aad_len;
-        let padded_len = (prefix_len + 15) / 16 * 16;
+        let padded_len = prefix_len.div_ceil(16) * 16;
         let mut aad_buf = [0u8; 512]; // 足够大的栈缓冲区（支持 AAD ≤ 510 字节）
 
         // Reason: 超过 510 字节需要 4 字节长度编码（RFC 3610 §2.2），
