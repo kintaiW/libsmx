@@ -186,26 +186,34 @@ pub fn sm4_crypt_ctr(key: &[u8; 16], nonce: &[u8; 16], data: &[u8]) -> Vec<u8> {
 
 // ── GCM ──────────────────────────────────────────────────────────────────────
 
-/// GF(2^128) 乘法（NIST SP 800-38D Algorithm 1）
-/// Reason: GHASH 的核心运算，不可约多项式 x^128 + x^7 + x^2 + x + 1
+/// GF(2^128) 乘法（NIST SP 800-38D Algorithm 1，常量时间）
+///
+/// # 安全性
+/// 使用掩码算术替代秘密依赖的条件分支，消除时序侧信道：
+/// - `mask_xi`：由当前标量位生成的 0x00/0xFF 掩码，替代 `if bit == 1`
+/// - `reduce_mask`：由 LSB 生成的 0x00/0xFF 掩码，替代 `if lsb == 1`
+///
+/// Reason: GHASH 密钥 H 来自 SM4_K(0^128)，属秘密值；原条件分支泄露 H 的汉明重量，
+///   是 cache-timing 和 branch-timing 攻击的经典目标（参见 Bricout 等 2016）。
 fn gf128_mul(x: &[u8; 16], y: &[u8; 16]) -> [u8; 16] {
     let mut z = [0u8; 16];
     let mut v = *y;
     for byte_xi in x.iter() {
         for bit_idx in (0..8).rev() {
-            if (byte_xi >> bit_idx) & 1 == 1 {
-                for j in 0..16 {
-                    z[j] ^= v[j];
-                }
+            // Reason: 0u8.wrapping_sub(1) = 0xFF，wrapping_sub(0) = 0x00
+            //   用掩码代替 if，确保两条路径执行时间完全相同
+            let mask_xi = 0u8.wrapping_sub((byte_xi >> bit_idx) & 1);
+            for j in 0..16 {
+                z[j] ^= v[j] & mask_xi;
             }
             let lsb = v[15] & 1;
             for j in (1..16).rev() {
                 v[j] = (v[j] >> 1) | (v[j - 1] << 7);
             }
             v[0] >>= 1;
-            if lsb == 1 {
-                v[0] ^= 0xE1;
-            }
+            // Reason: 同上，掩码替代 if lsb == 1，消除 GF 规约的秘密依赖分支
+            let reduce_mask = 0u8.wrapping_sub(lsb);
+            v[0] ^= 0xE1 & reduce_mask;
         }
     }
     z
@@ -357,13 +365,16 @@ pub fn sm4_decrypt_gcm(
 // ── CCM ──────────────────────────────────────────────────────────────────────
 
 /// 构造 CCM CBC-MAC（RFC 3610）
+///
+/// # 错误
+/// `aad` 超过 510 字节时返回 `Error::InvalidInputLength`（当前实现仅支持 2 字节长度编码）。
 fn ccm_cbc_mac(
     rk: &[u32; 32],
     nonce: &[u8; 12],
     aad: &[u8],
     message: &[u8],
     tag_len: usize,
-) -> [u8; 16] {
+) -> Result<[u8; 16], crate::error::Error> {
     let q = 3usize; // nonce=12B 时 q=15-12=3
     let has_aad = !aad.is_empty();
     let flags = ((has_aad as u8) << 6) | (((tag_len - 2) / 2) as u8) << 3 | (q as u8 - 1);
@@ -383,17 +394,23 @@ fn ccm_cbc_mac(
         // Reason: CCM AAD 前缀 2 字节长度 + AAD 数据，补零至 16 字节对齐
         let prefix_len = 2 + aad_len;
         let padded_len = (prefix_len + 15) / 16 * 16;
-        let mut aad_buf = [0u8; 512]; // 足够大的栈缓冲区
-        if prefix_len <= aad_buf.len() {
-            aad_buf[0..2].copy_from_slice(&(aad_len as u16).to_be_bytes());
-            aad_buf[2..2 + aad_len].copy_from_slice(aad);
-            for chunk in aad_buf[..padded_len].chunks(16) {
-                let block: [u8; 16] = chunk.try_into().unwrap();
-                for i in 0..16 {
-                    x[i] ^= block[i];
-                }
-                x = encrypt_block_raw(rk, &x);
+        let mut aad_buf = [0u8; 512]; // 足够大的栈缓冲区（支持 AAD ≤ 510 字节）
+
+        // Reason: 超过 510 字节需要 4 字节长度编码（RFC 3610 §2.2），
+        //   当前实现仅支持 2 字节编码，超限时必须拒绝而非静默跳过 AAD。
+        //   静默跳过会导致认证标签不包含 AAD，攻击者可随意篡改 AAD 而不被检测。
+        if prefix_len > aad_buf.len() {
+            return Err(crate::error::Error::InvalidInputLength);
+        }
+
+        aad_buf[0..2].copy_from_slice(&(aad_len as u16).to_be_bytes());
+        aad_buf[2..2 + aad_len].copy_from_slice(aad);
+        for chunk in aad_buf[..padded_len].chunks(16) {
+            let block: [u8; 16] = chunk.try_into().unwrap();
+            for i in 0..16 {
+                x[i] ^= block[i];
             }
+            x = encrypt_block_raw(rk, &x);
         }
     }
 
@@ -405,7 +422,7 @@ fn ccm_cbc_mac(
         }
         x = encrypt_block_raw(rk, &x);
     }
-    x
+    Ok(x)
 }
 
 /// SM4-CCM 加密（AEAD）
@@ -416,6 +433,9 @@ fn ccm_cbc_mac(
 ///
 /// # 返回
 /// 密文 || 认证标签（`tag_len` 字节）
+///
+/// # 错误
+/// - `aad` 超过 510 字节时返回 `Error::InvalidInputLength`
 #[cfg(feature = "alloc")]
 pub fn sm4_encrypt_ccm(
     key: &[u8; 16],
@@ -423,7 +443,7 @@ pub fn sm4_encrypt_ccm(
     aad: &[u8],
     plaintext: &[u8],
     tag_len: usize,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, crate::error::Error> {
     assert!(
         (4..=16).contains(&tag_len) && tag_len % 2 == 0,
         "CCM tag_len 须为 4~16 的偶数"
@@ -432,7 +452,7 @@ pub fn sm4_encrypt_ccm(
     let sm4 = Sm4Key::new(key);
     let rk = sm4.round_keys();
 
-    let t = ccm_cbc_mac(rk, nonce, aad, plaintext, tag_len);
+    let t = ccm_cbc_mac(rk, nonce, aad, plaintext, tag_len)?;
 
     let mut a0 = [0u8; 16];
     a0[0] = 2u8; // q-1 = 3-1 = 2
@@ -457,7 +477,7 @@ pub fn sm4_encrypt_ccm(
         }
     }
     out.extend_from_slice(&enc_tag[..tag_len]);
-    out
+    Ok(out)
 }
 
 /// SM4-CCM 解密（AEAD）
@@ -500,7 +520,7 @@ pub fn sm4_decrypt_ccm(
     }
 
     // Step 2: 对候选明文重新计算 CBC-MAC
-    let t = ccm_cbc_mac(rk, nonce, aad, &plaintext, tag_len);
+    let t = ccm_cbc_mac(rk, nonce, aad, &plaintext, tag_len)?;
     let mut expected_tag = [0u8; 16];
     for i in 0..tag_len {
         expected_tag[i] = t[i] ^ s0[i];
@@ -536,14 +556,27 @@ fn xts_mul_alpha(tweak: &mut [u8; 16]) {
 /// - `key1`: 数据加密密钥（16 字节）
 /// - `key2`: tweak 加密密钥（16 字节）
 /// - `tweak_sector`: 扇区号（16 字节，通常为扇区编号的小端表示）
-/// - `data`: 明文（须为 16 字节整倍数）
+/// - `data`: 明文（须为 16 字节整倍数，不支持非对齐输入）
+///
+/// # 错误
+/// `data` 为空或长度不是 16 的整倍数时返回 `Error::InvalidInputLength`。
+///
+/// # 注意
+/// XTS 的 ciphertext stealing（非对齐末尾块处理）超出本实现范围，
+/// 调用方须保证输入对齐；非对齐时须先在应用层填充后再调用。
 #[cfg(feature = "alloc")]
 pub fn sm4_encrypt_xts(
     key1: &[u8; 16],
     key2: &[u8; 16],
     tweak_sector: &[u8; 16],
     data: &[u8],
-) -> Vec<u8> {
+) -> Result<Vec<u8>, crate::error::Error> {
+    // Reason: 非对齐输入在旧实现中被静默丢弃（最后不足 16 字节块跳过），
+    //   导致密文比明文短而调用方无感知。拒绝非对齐输入防止数据静默丢失。
+    if data.is_empty() || data.len() % 16 != 0 {
+        return Err(crate::error::Error::InvalidInputLength);
+    }
+
     let sm4_1 = Sm4Key::new(key1);
     let sm4_2 = Sm4Key::new(key2);
     let mut tweak = *tweak_sector;
@@ -551,29 +584,35 @@ pub fn sm4_encrypt_xts(
 
     let mut out = Vec::with_capacity(data.len());
     for chunk in data.chunks(16) {
-        if chunk.len() == 16 {
-            let mut block = [0u8; 16];
-            for i in 0..16 {
-                block[i] = chunk[i] ^ tweak[i];
-            }
-            sm4_1.encrypt_block(&mut block);
-            for i in 0..16 {
-                out.push(block[i] ^ tweak[i]);
-            }
-            xts_mul_alpha(&mut tweak);
+        let mut block = [0u8; 16];
+        for i in 0..16 {
+            block[i] = chunk[i] ^ tweak[i];
         }
+        sm4_1.encrypt_block(&mut block);
+        for i in 0..16 {
+            out.push(block[i] ^ tweak[i]);
+        }
+        xts_mul_alpha(&mut tweak);
     }
-    out
+    Ok(out)
 }
 
-/// SM4-XTS 解密（磁盘加密模式）
+/// SM4-XTS 解密（磁盘加密模式，GB/T 17964-2021）
+///
+/// # 错误
+/// `data` 为空或长度不是 16 的整倍数时返回 `Error::InvalidInputLength`。
 #[cfg(feature = "alloc")]
 pub fn sm4_decrypt_xts(
     key1: &[u8; 16],
     key2: &[u8; 16],
     tweak_sector: &[u8; 16],
     data: &[u8],
-) -> Vec<u8> {
+) -> Result<Vec<u8>, crate::error::Error> {
+    // Reason: 同 sm4_encrypt_xts，拒绝非对齐输入防止数据静默丢失。
+    if data.is_empty() || data.len() % 16 != 0 {
+        return Err(crate::error::Error::InvalidInputLength);
+    }
+
     let sm4_1 = Sm4Key::new(key1);
     let sm4_2 = Sm4Key::new(key2);
     let mut tweak = *tweak_sector;
@@ -581,19 +620,17 @@ pub fn sm4_decrypt_xts(
 
     let mut out = Vec::with_capacity(data.len());
     for chunk in data.chunks(16) {
-        if chunk.len() == 16 {
-            let mut block = [0u8; 16];
-            for i in 0..16 {
-                block[i] = chunk[i] ^ tweak[i];
-            }
-            sm4_1.decrypt_block(&mut block);
-            for i in 0..16 {
-                out.push(block[i] ^ tweak[i]);
-            }
-            xts_mul_alpha(&mut tweak);
+        let mut block = [0u8; 16];
+        for i in 0..16 {
+            block[i] = chunk[i] ^ tweak[i];
         }
+        sm4_1.decrypt_block(&mut block);
+        for i in 0..16 {
+            out.push(block[i] ^ tweak[i]);
+        }
+        xts_mul_alpha(&mut tweak);
     }
-    out
+    Ok(out)
 }
 
 // ── 测试 ──────────────────────────────────────────────────────────────────────
@@ -656,7 +693,7 @@ mod tests {
         let aad = b"ccm aad";
         let plain = b"ccm plaintext!!!";
 
-        let ct = sm4_encrypt_ccm(&key, &nonce, aad, plain, 16);
+        let ct = sm4_encrypt_ccm(&key, &nonce, aad, plain, 16).unwrap();
         let pt = sm4_decrypt_ccm(&key, &nonce, aad, &ct, 16).unwrap();
         assert_eq!(pt, plain, "CCM 往返解密失败");
     }
@@ -666,13 +703,65 @@ mod tests {
     fn test_ccm_tag_tamper() {
         let key = [0u8; 16];
         let nonce = [0u8; 12];
-        let mut ct = sm4_encrypt_ccm(&key, &nonce, b"", b"secret data here", 16);
+        let mut ct = sm4_encrypt_ccm(&key, &nonce, b"", b"secret data here", 16).unwrap();
         // 篡改 tag（最后 16 字节）
         let last = ct.len() - 1;
         ct[last] ^= 1;
         assert!(
             sm4_decrypt_ccm(&key, &nonce, b"", &ct, 16).is_err(),
             "篡改 CCM tag 后应返回错误"
+        );
+    }
+
+    /// CCM AAD 超限应返回错误（而非静默跳过）
+    #[test]
+    fn test_ccm_aad_too_long() {
+        let key = [0u8; 16];
+        let nonce = [0u8; 12];
+        let big_aad = [0u8; 511]; // 超过 510 字节限制
+        assert!(
+            sm4_encrypt_ccm(&key, &nonce, &big_aad, b"data", 16).is_err(),
+            "AAD 超过 510 字节时应返回 InvalidInputLength"
+        );
+    }
+
+    /// XTS 加解密往返测试
+    #[test]
+    fn test_xts_roundtrip() {
+        let key1 = [0x11u8; 16];
+        let key2 = [0x22u8; 16];
+        let tweak = [0u8; 16];
+        let plain = [0x42u8; 32]; // 2 个 16 字节块
+
+        let ct = sm4_encrypt_xts(&key1, &key2, &tweak, &plain).unwrap();
+        let pt = sm4_decrypt_xts(&key1, &key2, &tweak, &ct).unwrap();
+        assert_eq!(pt, plain, "XTS 往返解密失败");
+    }
+
+    /// XTS 非对齐数据应返回错误
+    #[test]
+    fn test_xts_non_aligned_rejected() {
+        let key1 = [0u8; 16];
+        let key2 = [0u8; 16];
+        let tweak = [0u8; 16];
+
+        // 空输入
+        assert!(
+            sm4_encrypt_xts(&key1, &key2, &tweak, b"").is_err(),
+            "空输入应返回 InvalidInputLength"
+        );
+        // 非 16 倍数
+        assert!(
+            sm4_encrypt_xts(&key1, &key2, &tweak, b"not-aligned-data").is_err() == false,
+            "正好 16 字节不应返回错误"
+        );
+        assert!(
+            sm4_encrypt_xts(&key1, &key2, &tweak, &[0u8; 17]).is_err(),
+            "17 字节应返回 InvalidInputLength"
+        );
+        assert!(
+            sm4_decrypt_xts(&key1, &key2, &tweak, &[0u8; 15]).is_err(),
+            "15 字节应返回 InvalidInputLength"
         );
     }
 

@@ -151,7 +151,13 @@ impl Default for Sm3Hasher {
 ///
 /// # 返回
 /// 32 字节 HMAC 值
+///
+/// # 安全性
+/// `k_pad`/`ipad`/`opad` 含密钥派生材料，函数返回前用 `zeroize` 清零，
+/// 防止密钥残留在栈上被后续代码或内存扫描工具读取。
 pub fn hmac_sm3(key: &[u8], data: &[u8]) -> [u8; DIGEST_LEN] {
+    use zeroize::Zeroize;
+
     // 将 key 标准化到 64 字节（不足补零，过长先哈希）
     let mut k_pad = [0u8; 64];
     if key.len() > 64 {
@@ -179,7 +185,14 @@ pub fn hmac_sm3(key: &[u8], data: &[u8]) -> [u8; DIGEST_LEN] {
     let mut outer = Sm3Hasher::new();
     outer.update(&opad);
     outer.update(&inner_hash);
-    outer.finalize()
+    let result = outer.finalize();
+
+    // Reason: 清零栈上的密钥派生材料，防止密钥残留
+    k_pad.zeroize();
+    ipad.zeroize();
+    opad.zeroize();
+
+    result
 }
 
 #[cfg(test)]

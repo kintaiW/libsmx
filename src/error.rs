@@ -66,5 +66,10 @@ impl fmt::Display for Error {
     }
 }
 
+// Reason: std::error::Error 只在 std 环境可用；no_std 环境下仅提供 Display + Debug。
+//   条件编译确保 alloc-only 场景不引入 std 依赖。
+#[cfg(feature = "std")]
+impl std::error::Error for Error {}
+
 /// libsmx 统一 Result 类型
 pub type Result<T> = core::result::Result<T, Error>;

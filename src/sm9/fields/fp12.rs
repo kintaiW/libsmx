@@ -489,7 +489,8 @@ pub fn fp12_to_bytes(a: &Fp12) -> [u8; 384] {
 /// - a: yP 系数 -> c0.c0（1 slot，在 eval_line_at_p 中乘以 yP）
 /// - b: 常数项 -> c0.c1（v slot）
 /// - c: xP 系数 -> c1.c0（w slot，在 eval_line_at_p 中乘以 xP）
-/// Reason: 经双线性性测试验证，此约定对应 D-type twist BN256 配对正确系数。
+///
+///   Reason: 经双线性性测试验证，此约定对应 D-type twist BN256 配对正确系数。
 ///   double step: a=Z₁²·u, b=-2Y₁Z₁, c=3X₁²
 ///   add step:    a=r·x2, b=-(r·x1+h·y1), c=h·y2
 #[derive(Clone, Copy, Debug)]
@@ -509,7 +510,7 @@ pub struct LineEval {
 ///   - a 系数（yP 项）→ c0.c0 (1 slot)
 ///   - b 系数（常数项）→ c1.c1 (vw slot)
 ///   - c 系数（xP 项）→ c1.c2 (v²w slot)
-///   a、c 已经在 eval_line_at_p 中分别乘以 yP 和 xP。
+///     a、c 已经在 eval_line_at_p 中分别乘以 yP 和 xP。
 pub fn fp12_mul_by_line(f: &Fp12, l: &LineEval) -> Fp12 {
     let line_fp12 = Fp12 {
         c0: Fp6 {
