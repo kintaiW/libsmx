@@ -56,3 +56,8 @@ pub mod sm2;
 pub mod sm3;
 pub mod sm4;
 pub mod sm9;
+
+#[cfg(feature = "alloc")]
+pub mod bls;
+
+pub mod fpe;

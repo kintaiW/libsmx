@@ -15,6 +15,8 @@ Pure-Rust, `#![no_std]` implementation of Chinese commercial cryptography standa
 | **SM3** | GB/T 32905-2016 | Cryptographic Hash Algorithm (256-bit) |
 | **SM4** | GB/T 32907-2016 | Block Cipher (128-bit key, ECB/CBC/CTR/GCM/CCM/XTS) |
 | **SM9** | GB/T 38635.1-2-2020 | Identity-Based Cryptography (BN256 pairing) |
+| **BLS** | IETF RFC 9380 | BLS Signatures & Threshold Signatures (BN256) |
+| **FPE** | NIST SP 800-38G | Format-Preserving Encryption (FF1-like) |
 
 ## Features
 
@@ -31,7 +33,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-libsmx = "0.1"
+libsmx = "0.2"
 ```
 
 ### SM3 Hash
@@ -154,7 +156,7 @@ For `no_std` without `alloc`:
 
 ```toml
 [dependencies]
-libsmx = { version = "0.1", default-features = false }
+libsmx = { version = "0.2", default-features = false }
 ```
 
 ## Benchmarks

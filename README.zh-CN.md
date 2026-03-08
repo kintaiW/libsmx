@@ -15,6 +15,8 @@
 | **SM3** | GB/T 32905-2016 | 密码杂凑算法（256 位） |
 | **SM4** | GB/T 32907-2016 | 分组密码（128 位密钥，ECB/CBC/CTR/GCM/CCM/XTS） |
 | **SM9** | GB/T 38635.1-2-2020 | 标识密码（BN256 双线性配对） |
+| **BLS** | IETF RFC 9380 | BLS 签名与门限签名（BN256） |
+| **FPE** | NIST SP 800-38G | 格式保留加密（FF1 类） |
 
 ## 特性
 
@@ -31,7 +33,7 @@
 
 ```toml
 [dependencies]
-libsmx = "0.1"
+libsmx = "0.2"
 ```
 
 ### SM3 哈希
@@ -186,7 +188,7 @@ assert_eq!(decrypted, plaintext);
 
 ```toml
 [dependencies]
-libsmx = { version = "0.1", default-features = false }
+libsmx = { version = "0.2", default-features = false }
 ```
 
 无 `alloc` 时，SM3 哈希、SM3 HMAC、SM2 签名/验签、SM4 ECB 仍可用（固定大小数组 API）。

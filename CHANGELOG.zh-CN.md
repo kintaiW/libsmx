@@ -5,6 +5,38 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] - v0.2.0
+
+### 新增
+
+- **BLS 签名**（`bls` 模块，需 `alloc` 特性）
+  - `bls_keygen` / `bls_sign` / `bls_verify`：最小签名尺寸变体（签名 ∈ G1，公钥 ∈ G2）
+  - `bls_aggregate` / `bls_aggregate_verify`：多消息聚合签名
+  - `bls_fast_aggregate_verify`：同消息多签名者快速聚合验证
+  - `BlsSignature::to_bytes` / `from_bytes`：65 字节序列化（非压缩 G1 点）
+  - `BlsPubKey::to_bytes` / `from_bytes`：128 字节序列化（非压缩 G2 点）
+- **BLS 门限签名**（`bls::threshold` 模块）
+  - `bls_threshold_keygen`：可信分发者模式，Shamir 多项式秘密分享
+  - `bls_partial_sign` / `bls_combine_signatures`：Lagrange 插值聚合
+  - 支持 (t+1, n) 门限配置
+- **Hash-to-Curve**（`bls::hash_to_curve` 模块）
+  - `hash_to_g1`：符合 RFC 9380，将任意消息映射到 BN256 G1 点
+  - `expand_message_xmd`：RFC 9380 §5.3.1，使用 SM3 进行消息扩展
+  - `map_to_curve_svdw`：Shallue-van de Woestijne 映射（BN256 a=0 曲线）
+- **`fp_sqrt`** 在 `sm9::fields::fp` 中
+  - Tonelli-Shanks 模平方根（SM9 BN256 Fp，p ≡ 1 mod 4）
+  - `fp_is_square`：基于欧拉判据的二次剩余判定
+- **FPE 格式保留加密**（`fpe` 模块）
+  - `FpeKey`：基于 SM4 的 7 轮 Luby-Rackoff Feistel 密码
+  - 支持 1~128 位明文/密文域
+  - `expand_tweak`：通过 SM4 哈希实现任意长度 tweak
+  - 离开作用域自动清零密钥（`ZeroizeOnDrop`）
+
+### 安全
+
+- BLS 签名 DST 分离：签名使用 `BLS_SIG_SM9G1_XMD:SM3_SVDW_RO_NUL_`，PoP 使用不同标签
+- BN256 安全说明：API 文档中注明约 100 位实际安全强度
+
 ## [0.1.1] - 2025-03-07
 
 ### 修复
@@ -70,5 +102,6 @@
 - XTS：拒绝非 16 字节对齐输入，而非静默截断
 - SM9 `hash_to_range`：用常量时间条件选择替换可变迭代 `while` 循环
 
+[0.2.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.0
 [0.1.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.0

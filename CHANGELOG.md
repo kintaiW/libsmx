@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - v0.2.0
+
+### Added
+
+- **BLS signatures** (`bls` module, requires `alloc` feature)
+  - `bls_keygen` / `bls_sign` / `bls_verify`: minimal-signature-size variant (sig ∈ G1, pk ∈ G2)
+  - `bls_aggregate` / `bls_aggregate_verify`: multi-message aggregate signatures
+  - `bls_fast_aggregate_verify`: fast aggregate verification for same-message multi-signer
+  - `BlsSignature::to_bytes` / `from_bytes`: 65-byte serialization (uncompressed G1 point)
+  - `BlsPubKey::to_bytes` / `from_bytes`: 128-byte serialization (uncompressed G2 point)
+- **BLS threshold signatures** (`bls::threshold` module)
+  - `bls_threshold_keygen`: Trusted Dealer mode, Shamir polynomial secret sharing
+  - `bls_partial_sign` / `bls_combine_signatures`: Lagrange interpolation based aggregation
+  - Supports (t+1, n) threshold configurations
+- **Hash-to-Curve** (`bls::hash_to_curve` module)
+  - `hash_to_g1`: RFC 9380 compliant, maps arbitrary message to BN256 G1 point
+  - `expand_message_xmd`: RFC 9380 §5.3.1, message expansion using SM3 as hash
+  - `map_to_curve_svdw`: Shallue-van de Woestijne mapping for BN256 (a=0 curve)
+- **`fp_sqrt`** in `sm9::fields::fp`
+  - Tonelli-Shanks modular square root for SM9 BN256 Fp (p ≡ 1 mod 4)
+  - `fp_is_square`: Euler criterion based quadratic residue test
+- **FPE format-preserving encryption** (`fpe` module)
+  - `FpeKey`: 7-round Luby-Rackoff Feistel cipher based on SM4
+  - Supports 1~128 bit plaintext/ciphertext domains
+  - `expand_tweak`: arbitrary-length tweak via SM4 hash
+  - Automatic key zeroization on drop (`ZeroizeOnDrop`)
+
+### Security
+
+- BLS signature DST separation: signing uses `BLS_SIG_SM9G1_XMD:SM3_SVDW_RO_NUL_`, PoP uses a different tag
+- BN256 security note: ~100-bit actual security level documented in API docs
+
 ## [0.1.1] - 2025-03-07
 
 ### Fixed
@@ -70,5 +102,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - XTS: reject non-16-byte-aligned input instead of silently truncating
 - SM9 `hash_to_range`: replaced variable-iteration `while` loop with constant-time conditional select
 
+[0.2.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.0
 [0.1.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.0
