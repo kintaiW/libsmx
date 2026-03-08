@@ -553,6 +553,69 @@ pub fn sm4_decrypt_ccm(
     Ok(plaintext)
 }
 
+// ── GCM/CCM 合并格式（TLS 适配）────────────────────────────────────────────────
+
+/// SM4-GCM 加密（合并输出格式：`ciphertext || tag`）
+///
+/// TLS 记录层要求 AEAD 输出为单一缓冲区，此函数将密文和 16 字节 tag 合并返回。
+#[cfg(feature = "alloc")]
+pub fn sm4_encrypt_gcm_combined(
+    key: &[u8; 16],
+    nonce: &[u8; 12],
+    aad: &[u8],
+    plaintext: &[u8],
+) -> Vec<u8> {
+    let (mut ct, tag) = sm4_encrypt_gcm(key, nonce, aad, plaintext);
+    ct.extend_from_slice(&tag);
+    ct
+}
+
+/// SM4-GCM 解密（合并输入格式：`ciphertext || tag`）
+///
+/// 输入必须至少 16 字节（tag 长度）；先验证 tag 再解密。
+#[cfg(feature = "alloc")]
+pub fn sm4_decrypt_gcm_combined(
+    key: &[u8; 16],
+    nonce: &[u8; 12],
+    aad: &[u8],
+    ciphertext_with_tag: &[u8],
+) -> Result<Vec<u8>, crate::error::Error> {
+    if ciphertext_with_tag.len() < 16 {
+        return Err(crate::error::Error::InvalidInputLength);
+    }
+    let ct_len = ciphertext_with_tag.len() - 16;
+    let ct = &ciphertext_with_tag[..ct_len];
+    let tag: &[u8; 16] = ciphertext_with_tag[ct_len..].try_into().unwrap();
+    sm4_decrypt_gcm(key, nonce, aad, ct, tag)
+}
+
+/// SM4-CCM 加密（tag_len = 16，合并输出格式）
+///
+/// TLS 1.3 `TLS_SM4_CCM_SM3` 使用 16 字节 tag。
+/// 等同于 `sm4_encrypt_ccm`（其输出已是 ciphertext||tag 合并格式）。
+#[cfg(feature = "alloc")]
+pub fn sm4_encrypt_ccm_combined(
+    key: &[u8; 16],
+    nonce: &[u8; 12],
+    aad: &[u8],
+    plaintext: &[u8],
+) -> Result<Vec<u8>, crate::error::Error> {
+    sm4_encrypt_ccm(key, nonce, aad, plaintext, 16)
+}
+
+/// SM4-CCM 解密（tag_len = 16，合并输入格式）
+///
+/// 等同于 `sm4_decrypt_ccm(..., 16)`。
+#[cfg(feature = "alloc")]
+pub fn sm4_decrypt_ccm_combined(
+    key: &[u8; 16],
+    nonce: &[u8; 12],
+    aad: &[u8],
+    ciphertext_with_tag: &[u8],
+) -> Result<Vec<u8>, crate::error::Error> {
+    sm4_decrypt_ccm(key, nonce, aad, ciphertext_with_tag, 16)
+}
+
 // ── XTS ──────────────────────────────────────────────────────────────────────
 
 /// GF(2^128) 乘以 α（XTS tweak 更新）

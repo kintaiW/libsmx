@@ -23,6 +23,7 @@
 //! 如需 HMAC，请使用 [`hmac_sm3`]。
 
 mod compress;
+pub mod hkdf;
 
 use compress::{compress, IV};
 
@@ -104,33 +105,56 @@ impl Sm3Hasher {
     ///
     /// 调用后此 hasher 不应再使用（消耗所有权的版本请用 [`finalize`](Self::finalize)）。
     pub fn finalize(mut self) -> [u8; DIGEST_LEN] {
+        Self::finalize_inner(&mut self)
+    }
+
+    /// 完成哈希并重置状态（供复用，无需重新构造）
+    ///
+    /// 等同于 `finalize()` 后调用 `reset()`，但只需一次操作。
+    /// rustls `Hasher` trait 要求此语义（`finish(&mut self)`）。
+    pub fn finalize_reset(&mut self) -> [u8; DIGEST_LEN] {
+        let out = Self::finalize_inner(self);
+        self.reset();
+        out
+    }
+
+    /// 重置为初始状态（等同于重新调用 `new()`，但复用已分配内存）
+    pub fn reset(&mut self) {
+        self.state = IV;
+        self.buffer = [0u8; 64];
+        self.buf_len = 0;
+        self.bit_len = 0;
+    }
+
+    /// 内部完成函数（同时供消耗版和借用版使用）
+    fn finalize_inner(h: &mut Self) -> [u8; DIGEST_LEN] {
         // 计算总位数（包含缓冲区中的字节）
-        let total_bits = self.bit_len.wrapping_add((self.buf_len as u64) * 8);
+        let total_bits = h.bit_len.wrapping_add((h.buf_len as u64) * 8);
 
         // Padding：追加 0x80 + 零字节，使消息长度 ≡ 56 (mod 64)
-        self.buffer[self.buf_len] = 0x80;
-        self.buf_len += 1;
+        h.buffer[h.buf_len] = 0x80;
+        h.buf_len += 1;
 
-        if self.buf_len > 56 {
+        if h.buf_len > 56 {
             // 当前块填不下长度字段，先处理这块，再开一块
-            for i in self.buf_len..64 {
-                self.buffer[i] = 0;
+            for i in h.buf_len..64 {
+                h.buffer[i] = 0;
             }
-            compress(&mut self.state, &self.buffer);
-            self.buffer = [0u8; 64];
+            compress(&mut h.state, &h.buffer);
+            h.buffer = [0u8; 64];
         } else {
-            for i in self.buf_len..56 {
-                self.buffer[i] = 0;
+            for i in h.buf_len..56 {
+                h.buffer[i] = 0;
             }
         }
 
         // 最后 8 字节写入总位长（大端）
-        self.buffer[56..64].copy_from_slice(&total_bits.to_be_bytes());
-        compress(&mut self.state, &self.buffer);
+        h.buffer[56..64].copy_from_slice(&total_bits.to_be_bytes());
+        compress(&mut h.state, &h.buffer);
 
         // 输出：8 个 u32 大端序拼接
         let mut out = [0u8; 32];
-        for (i, &v) in self.state.iter().enumerate() {
+        for (i, &v) in h.state.iter().enumerate() {
             out[i * 4..i * 4 + 4].copy_from_slice(&v.to_be_bytes());
         }
         out
@@ -260,6 +284,41 @@ mod tests {
         let data = b"data";
         let mac = hmac_sm3(&long_key, data);
         assert_eq!(mac.len(), 32);
+    }
+
+    /// reset() 后状态恢复为 new() 初始状态
+    #[test]
+    fn test_reset_equals_new() {
+        let mut h = Sm3Hasher::new();
+        h.update(b"some data");
+        h.reset();
+        let digest_after_reset = h.finalize();
+        let digest_fresh = Sm3Hasher::digest(b"");
+        assert_eq!(digest_after_reset, digest_fresh);
+    }
+
+    /// finalize_reset() 返回正确摘要，且随后状态已重置
+    #[test]
+    fn test_finalize_reset_correctness() {
+        let mut h = Sm3Hasher::new();
+        h.update(b"abc");
+        let d1 = h.finalize_reset();
+        // d1 应等于 SM3("abc")
+        assert_eq!(d1, Sm3Hasher::digest(b"abc"));
+        // 重置后哈希空消息应等于 SM3("")
+        let d2 = h.finalize();
+        assert_eq!(d2, Sm3Hasher::digest(b""));
+    }
+
+    /// finalize_reset() 可连续使用两次，结果一致
+    #[test]
+    fn test_finalize_reset_repeatable() {
+        let mut h = Sm3Hasher::new();
+        h.update(b"test");
+        let d1 = h.finalize_reset();
+        h.update(b"test");
+        let d2 = h.finalize_reset();
+        assert_eq!(d1, d2);
     }
 
     // 辅助：从十六进制字符串构造 [u8; 32]

@@ -5,10 +5,26 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased] - v0.2.0
+## [0.2.1] - 2025-03-08
 
 ### 新增
 
+- **SM2 密钥交换**（`sm2::key_exchange` 模块）
+  - `exchange_a` / `exchange_b`：GB/T 32918.3 完整密钥交换协议（带确认哈希）
+  - `ecdh`：简单 SM2-ECDH 共享密钥计算（适配 TLS/rustls）
+  - `EphemeralKey`：临时密钥对（`ZeroizeOnDrop`）
+- **SM2 DER 编解码**（`sm2::der` 模块）
+  - `sig_to_der` / `sig_from_der`：签名 DER 编解码
+  - `private_key_from_sec1_der` / `private_key_from_pkcs8_der`：私钥解析
+- **SM2 便捷 API**（`sm2` 模块）
+  - `sign_message` / `verify_message`：自动计算 Z 值的一步签名/验签
+- **HKDF-SM3**（`sm3::hkdf` 模块）
+  - `hkdf_extract` / `hkdf_expand` / `hkdf`：RFC 5869 兼容
+- **SM3 Hasher 增强**
+  - `reset()` / `finalize_reset()`：支持流式复用
+- **SM4 AEAD 合并格式**
+  - `sm4_encrypt_gcm_combined` / `sm4_decrypt_gcm_combined`：TLS 格式（密文||Tag）
+  - `sm4_encrypt_ccm_combined` / `sm4_decrypt_ccm_combined`：同上
 - **BLS 签名**（`bls` 模块，需 `alloc` 特性）
   - `bls_keygen` / `bls_sign` / `bls_verify`：最小签名尺寸变体（签名 ∈ G1，公钥 ∈ G2）
   - `bls_aggregate` / `bls_aggregate_verify`：多消息聚合签名
@@ -102,6 +118,7 @@
 - XTS：拒绝非 16 字节对齐输入，而非静默截断
 - SM9 `hash_to_range`：用常量时间条件选择替换可变迭代 `while` 循环
 
+[0.2.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.0
 [0.1.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.0

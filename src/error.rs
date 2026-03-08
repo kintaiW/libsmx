@@ -23,6 +23,8 @@ pub enum Error {
     PointAtInfinity,
     /// 输入数据长度不合法
     InvalidInputLength,
+    /// 密钥交换失败（共享点为无穷远或 KDF 输出全零）
+    KeyExchangeFailed,
 
     // ── SM4 错误 ────────────────────────────────────────────────────────────
     /// AEAD 认证标签验证失败（GCM/CCM 解密时）
@@ -55,6 +57,7 @@ impl fmt::Display for Error {
             Error::DecryptFailed => write!(f, "decryption failed"),
             Error::PointAtInfinity => write!(f, "point at infinity"),
             Error::InvalidInputLength => write!(f, "invalid input length"),
+            Error::KeyExchangeFailed => write!(f, "key exchange failed"),
             Error::AuthTagMismatch => write!(f, "authentication tag mismatch"),
             Error::NotOnCurve => write!(f, "point not on curve"),
             Error::ZeroScalar => write!(f, "zero scalar"),

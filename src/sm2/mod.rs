@@ -10,9 +10,11 @@
 //! 签名必须使用 `SM3(Z||M)` 作为消息摘要，而非直接 `SM3(M)`。
 //! 所有公开签名接口均要求调用方提供用户 ID（或已计算好的 Z 值）。
 
+pub mod der;
 pub mod ec;
 pub mod field;
 pub mod kdf;
+pub mod key_exchange;
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
@@ -172,6 +174,56 @@ pub fn sign_with_k(e: &[u8; 32], pri_key: &PrivateKey, k: &U256) -> Result<[u8; 
     sig[..32].copy_from_slice(&r.to_be_bytes());
     sig[32..].copy_from_slice(&s.to_be_bytes());
     Ok(sig)
+}
+
+/// SM2 签名（标准接口，随机 k）
+///
+/// # 合规说明
+/// 此函数接受预计算好的消息摘要 `e = SM3(Z||M)`。
+/// 调用方应先用 `get_z` + `get_e` 计算 e，确保满足 GB/T 32918.2-2016 §5.5。
+/// SM2 签名（便捷接口，自动计算 Z 值与消息摘要）
+///
+/// 等同于 `get_z` + `get_e` + `sign` 的组合，适合不需要手动管理摘要的场景。
+///
+/// # 参数
+/// - `msg`: 原始消息
+/// - `id`: 用户可辨别标识（通常使用 `b"1234567812345678"`）
+/// - `pri_key`: 私钥
+/// - `rng`: 随机数生成器
+///
+/// # 合规说明
+/// 内部自动计算 `Z = SM3(ENTL||ID||a||b||Gx||Gy||Px||Py)` 和 `e = SM3(Z||M)`，
+/// 符合 GB/T 32918.2-2016 §5.5。
+pub fn sign_message<R: RngCore>(
+    msg: &[u8],
+    id: &[u8],
+    pri_key: &PrivateKey,
+    rng: &mut R,
+) -> [u8; 64] {
+    let pub_key = pri_key.public_key();
+    let z = get_z(id, &pub_key);
+    let e = get_e(&z, msg);
+    sign(&e, pri_key, rng)
+}
+
+/// SM2 验签（便捷接口，自动计算 Z 值与消息摘要）
+///
+/// 等同于 `get_z` + `get_e` + `verify` 的组合。
+///
+/// # 参数
+/// - `msg`: 原始消息
+/// - `id`: 用户可辨别标识
+/// - `pub_key`: 公钥（65 字节，04||x||y）
+/// - `sig`: 签名（64 字节，r||s）
+pub fn verify_message(
+    msg: &[u8],
+    id: &[u8],
+    pub_key: &[u8; 65],
+    sig: &[u8; 64],
+) -> Result<(), Error> {
+    let z = get_z(id, pub_key);
+    let e = get_e(&z, msg);
+    verify(&e, pub_key, sig)
 }
 
 /// SM2 签名（标准接口，随机 k）
@@ -479,6 +531,49 @@ mod tests {
         let ciphertext = encrypt(&pub_key, msg, &mut rng).expect("加密应成功");
         let plaintext = decrypt(&pri_key, &ciphertext).expect("解密应成功");
         assert_eq!(plaintext, msg);
+    }
+
+    #[test]
+    fn test_sign_message_verify_message_roundtrip() {
+        let d_bytes: [u8; 32] = [
+            0x39, 0x45, 0x20, 0x8f, 0x7b, 0x21, 0x44, 0xb1, 0x3f, 0x36, 0xe3, 0x8a, 0xc6, 0xd3,
+            0x9f, 0x95, 0x88, 0x93, 0x93, 0x69, 0x28, 0x60, 0xb5, 0x1a, 0x42, 0xfb, 0x81, 0xef,
+            0x4d, 0xf7, 0xc5, 0xb8,
+        ];
+        let pri_key = PrivateKey::from_bytes(&d_bytes).unwrap();
+        let pub_key = pri_key.public_key();
+
+        let mut rng = FakeRng([
+            0x59, 0x27, 0x6e, 0x27, 0xd5, 0x06, 0x86, 0x1a, 0x16, 0x68, 0x0f, 0x3a, 0xd9, 0xc0,
+            0x2d, 0xcc, 0xef, 0x3c, 0xc1, 0xfa, 0x3c, 0xdb, 0xe4, 0xce, 0x6d, 0x54, 0xb8, 0x0d,
+            0xea, 0xc1, 0xbc, 0x21,
+        ]);
+
+        let msg = b"hello sign_message";
+        let sig = sign_message(msg, DEFAULT_ID, &pri_key, &mut rng);
+        verify_message(msg, DEFAULT_ID, &pub_key, &sig).expect("便捷验签应通过");
+    }
+
+    #[test]
+    fn test_verify_message_rejects_wrong_id() {
+        let d_bytes: [u8; 32] = [
+            0x39, 0x45, 0x20, 0x8f, 0x7b, 0x21, 0x44, 0xb1, 0x3f, 0x36, 0xe3, 0x8a, 0xc6, 0xd3,
+            0x9f, 0x95, 0x88, 0x93, 0x93, 0x69, 0x28, 0x60, 0xb5, 0x1a, 0x42, 0xfb, 0x81, 0xef,
+            0x4d, 0xf7, 0xc5, 0xb8,
+        ];
+        let pri_key = PrivateKey::from_bytes(&d_bytes).unwrap();
+        let pub_key = pri_key.public_key();
+
+        let mut rng = FakeRng([
+            0x59, 0x27, 0x6e, 0x27, 0xd5, 0x06, 0x86, 0x1a, 0x16, 0x68, 0x0f, 0x3a, 0xd9, 0xc0,
+            0x2d, 0xcc, 0xef, 0x3c, 0xc1, 0xfa, 0x3c, 0xdb, 0xe4, 0xce, 0x6d, 0x54, 0xb8, 0x0d,
+            0xea, 0xc1, 0xbc, 0x21,
+        ]);
+
+        let msg = b"hello sign_message";
+        let sig = sign_message(msg, DEFAULT_ID, &pri_key, &mut rng);
+        // 用错误 ID 验签应失败
+        assert!(verify_message(msg, b"wrong-id", &pub_key, &sig).is_err());
     }
 
     #[cfg(feature = "alloc")]

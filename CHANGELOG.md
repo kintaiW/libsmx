@@ -5,10 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - v0.2.0
+## [0.2.1] - 2025-03-08
 
 ### Added
 
+- **SM2 key exchange** (`sm2::key_exchange` module)
+  - `exchange_a` / `exchange_b`: GB/T 32918.3 full key exchange protocol with confirmation hash
+  - `ecdh`: Simple SM2-ECDH shared secret computation (TLS/rustls compatible)
+  - `ecdh_from_slice`: Slice-based ECDH for TLS integration
+  - `EphemeralKey`: Ephemeral key pair with `ZeroizeOnDrop`
+- **SM2 DER codec** (`sm2::der` module)
+  - `sig_to_der` / `sig_from_der`: Signature DER encoding/decoding
+  - `private_key_from_sec1_der`: RFC 5915 SEC1 private key parsing
+  - `private_key_from_pkcs8_der`: RFC 5958 PKCS#8 private key parsing
+- **SM2 convenience API** (`sm2` module)
+  - `sign_message` / `verify_message`: One-step sign/verify with automatic Z-value computation
+- **HKDF-SM3** (`sm3::hkdf` module)
+  - `hkdf_extract` / `hkdf_expand` / `hkdf`: RFC 5869 compatible
+- **SM3 Hasher enhancements**
+  - `reset()` / `finalize_reset()`: Streaming hasher reuse
+- **SM4 AEAD combined format**
+  - `sm4_encrypt_gcm_combined` / `sm4_decrypt_gcm_combined`: TLS format (ciphertext||tag)
+  - `sm4_encrypt_ccm_combined` / `sm4_decrypt_ccm_combined`: Same format for CCM
 - **BLS signatures** (`bls` module, requires `alloc` feature)
   - `bls_keygen` / `bls_sign` / `bls_verify`: minimal-signature-size variant (sig ∈ G1, pk ∈ G2)
   - `bls_aggregate` / `bls_aggregate_verify`: multi-message aggregate signatures
@@ -102,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - XTS: reject non-16-byte-aligned input instead of silently truncating
 - SM9 `hash_to_range`: replaced variable-iteration `while` loop with constant-time conditional select
 
+[0.2.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.0
 [0.1.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.0
