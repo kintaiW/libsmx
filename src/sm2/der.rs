@@ -14,6 +14,18 @@
 //! - **SEC1**（RFC 5915）：`ECPrivateKey SEQUENCE { version INTEGER(1), privateKey OCTET STRING, ... }`
 //! - **PKCS#8**（RFC 5958）：`PrivateKeyInfo SEQUENCE { version INTEGER(0), algorithm, privateKey OCTET STRING(SEC1) }`
 //!
+//! ## 公钥 SPKI 格式
+//! rustls `SigningKey::public_key()` 需要 `SubjectPublicKeyInfoDer`：
+//! ```text
+//! SEQUENCE {
+//!   SEQUENCE {
+//!     OID id-ecPublicKey (1.2.840.10045.2.1)
+//!     OID SM2           (1.2.156.10197.1.301)
+//!   }
+//!   BIT STRING (04 || x(32B) || y(32B))
+//! }
+//! ```
+//!
 //! ## DER INTEGER 编码规则
 //! - 去除前导零（但若最高位为 1，需在前补 0x00 防止被解析为负数）
 //! - tag = 0x02，length 占 1 字节（r/s < 256 位时长度 ≤ 33）
@@ -259,6 +271,56 @@ pub fn private_key_from_pkcs8_der(der: &[u8]) -> Result<PrivateKey, Error> {
     private_key_from_sec1_der(sec1_der)
 }
 
+// ── SM2 公钥 SPKI DER 编码 ────────────────────────────────────────────────────
+
+/// 将 SM2 公钥（65 字节，04||x||y）编码为 SubjectPublicKeyInfo DER
+///
+/// 格式（RFC 5480）：
+/// ```text
+/// SEQUENCE {
+///   SEQUENCE {
+///     OID 1.2.840.10045.2.1  (id-ecPublicKey, 7 字节)
+///     OID 1.2.156.10197.1.301 (SM2, 8 字节)
+///   }
+///   BIT STRING 0x00 || pub_key (65 字节 + 1 字节前缀)
+/// }
+/// ```
+///
+/// 此格式是 rustls `SigningKey::public_key()` 所需的 `SubjectPublicKeyInfoDer`。
+#[cfg(feature = "alloc")]
+pub fn public_key_to_spki_der(pub_key: &[u8; 65]) -> Vec<u8> {
+    // OID 1.2.840.10045.2.1 (id-ecPublicKey): 06 07 2a 86 48 ce 3d 02 01
+    let oid_ec: &[u8] = &[0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01];
+    // OID 1.2.156.10197.1.301 (SM2): 06 08 2a 81 1c cf 55 01 82 2d
+    let oid_sm2: &[u8] = &[0x06, 0x08, 0x2a, 0x81, 0x1c, 0xcf, 0x55, 0x01, 0x82, 0x2d];
+
+    // AlgorithmIdentifier SEQUENCE
+    let alg_inner_len = oid_ec.len() + oid_sm2.len();
+    let mut alg = Vec::with_capacity(2 + alg_inner_len);
+    alg.push(0x30);
+    alg.push(alg_inner_len as u8);
+    alg.extend_from_slice(oid_ec);
+    alg.extend_from_slice(oid_sm2);
+
+    // BIT STRING: 0x03 <len> 0x00 <pub_key>
+    // Reason: 0x00 是 unused bits 字段，表示最后一字节无填充位
+    let bit_str_len = 1 + pub_key.len(); // 0x00 前缀 + 65 字节公钥
+    let mut bit_str = Vec::with_capacity(2 + bit_str_len);
+    bit_str.push(0x03);
+    bit_str.push(bit_str_len as u8);
+    bit_str.push(0x00); // unused bits = 0
+    bit_str.extend_from_slice(pub_key);
+
+    // 外层 SEQUENCE
+    let outer_len = alg.len() + bit_str.len();
+    let mut der = Vec::with_capacity(2 + outer_len);
+    der.push(0x30);
+    der.push(outer_len as u8);
+    der.extend_from_slice(&alg);
+    der.extend_from_slice(&bit_str);
+    der
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,5 +496,38 @@ mod tests {
         let mut der = make_pkcs8_der(&RAW_KEY);
         der[0] = 0x04; // 破坏外层 SEQUENCE tag
         assert!(private_key_from_pkcs8_der(&der).is_err());
+    }
+
+    // ── SPKI DER 测试 ──────────────────────────────────────────────────────────
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_spki_der_structure() {
+        use crate::sm2::PrivateKey;
+        let pri = PrivateKey::from_bytes(&RAW_KEY).unwrap();
+        let pub_key = pri.public_key();
+        let spki = public_key_to_spki_der(&pub_key);
+
+        // 外层 SEQUENCE
+        assert_eq!(spki[0], 0x30, "外层 tag 应为 SEQUENCE");
+        // BIT STRING 内包含 04||x||y（65字节）
+        // 确认公钥原始字节出现在 SPKI 中
+        let pos = spki.windows(65).position(|w| w == pub_key);
+        assert!(pos.is_some(), "SPKI 应包含原始公钥字节");
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_spki_der_oid_ec() {
+        use crate::sm2::PrivateKey;
+        let pri = PrivateKey::from_bytes(&RAW_KEY).unwrap();
+        let pub_key = pri.public_key();
+        let spki = public_key_to_spki_der(&pub_key);
+        // id-ecPublicKey OID bytes
+        let oid_ec: &[u8] = &[0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01];
+        assert!(
+            spki.windows(oid_ec.len()).any(|w| w == oid_ec),
+            "SPKI 应包含 id-ecPublicKey OID"
+        );
     }
 }

@@ -33,7 +33,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-libsmx = "0.2"
+libsmx = "0.3"
 ```
 
 ### SM3 Hash
@@ -156,7 +156,7 @@ For `no_std` without `alloc`:
 
 ```toml
 [dependencies]
-libsmx = { version = "0.2", default-features = false }
+libsmx = { version = "0.3", default-features = false }
 ```
 
 ## Benchmarks

@@ -33,7 +33,7 @@
 
 ```toml
 [dependencies]
-libsmx = "0.2"
+libsmx = "0.3"
 ```
 
 ### SM3 哈希
@@ -188,7 +188,7 @@ assert_eq!(decrypted, plaintext);
 
 ```toml
 [dependencies]
-libsmx = { version = "0.2", default-features = false }
+libsmx = { version = "0.3", default-features = false }
 ```
 
 无 `alloc` 时，SM3 哈希、SM3 HMAC、SM2 签名/验签、SM4 ECB 仍可用（固定大小数组 API）。

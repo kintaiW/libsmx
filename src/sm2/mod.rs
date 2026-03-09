@@ -32,6 +32,11 @@ use crate::sm2::field::{
 };
 use crate::sm3::Sm3Hasher;
 
+/// SM2 默认用户可辨别标识（GB/T 32918.2-2016 §A.2 示例值）
+///
+/// 当调用方无自定义 ID 时，应使用此常量作为 `sign_message` / `verify_message` 的 `id` 参数。
+pub const DEFAULT_ID: &[u8] = b"1234567812345678";
+
 // ── 私钥类型 ──────────────────────────────────────────────────────────────────
 
 /// SM2 私钥（32 字节，离开作用域自动清零）
@@ -424,9 +429,6 @@ pub fn decrypt(pri_key: &PrivateKey, ciphertext: &[u8]) -> Result<Vec<u8>, Error
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 默认用户 ID（GB/T 规范示例中常用的标准 ID）
-    const DEFAULT_ID: &[u8] = b"1234567812345678";
 
     struct FakeRng([u8; 32]);
     impl RngCore for FakeRng {

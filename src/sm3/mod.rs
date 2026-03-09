@@ -219,8 +219,80 @@ pub fn hmac_sm3(key: &[u8], data: &[u8]) -> [u8; DIGEST_LEN] {
     result
 }
 
+/// 流式 HMAC-SM3
+///
+/// 与 [`hmac_sm3`] 功能相同，但支持多次 [`update`](HmacSm3::update) 调用，
+/// 适用于 rustls `hmac::Key::sign_concat` 等多切片场景。
+///
+/// # 安全性
+/// `opad_key` 含派生自密钥的材料，结构体析构时由 `Zeroize` 自动清零。
+#[derive(Clone)]
+pub struct HmacSm3 {
+    /// 正在计算 inner hash（已喂入 ipad 前缀）
+    inner: Sm3Hasher,
+    /// 预计算的 opad XOR key（64 字节）
+    opad_key: [u8; 64],
+}
+
+impl HmacSm3 {
+    /// 以给定密钥初始化 HMAC-SM3
+    pub fn new(key: &[u8]) -> Self {
+        use zeroize::Zeroize;
+
+        let mut k_pad = [0u8; 64];
+        if key.len() > 64 {
+            let h = Sm3Hasher::digest(key);
+            k_pad[..32].copy_from_slice(&h);
+        } else {
+            k_pad[..key.len()].copy_from_slice(key);
+        }
+
+        let mut ipad_key = [0u8; 64];
+        let mut opad_key = [0u8; 64];
+        for i in 0..64 {
+            ipad_key[i] = k_pad[i] ^ 0x36;
+            opad_key[i] = k_pad[i] ^ 0x5C;
+        }
+        k_pad.zeroize();
+
+        // Reason: 预喂 ipad 前缀，后续 update 只需追加消息数据
+        let mut inner = Sm3Hasher::new();
+        inner.update(&ipad_key);
+        ipad_key.zeroize();
+
+        Self { inner, opad_key }
+    }
+
+    /// 追加消息数据
+    pub fn update(&mut self, data: &[u8]) {
+        self.inner.update(data);
+    }
+
+    /// 完成计算，返回 32 字节 HMAC 值
+    pub fn finalize(self) -> [u8; DIGEST_LEN] {
+        use zeroize::Zeroize;
+        let inner_hash = self.inner.finalize();
+        let mut opad_key = self.opad_key;
+        let mut outer = Sm3Hasher::new();
+        outer.update(&opad_key);
+        outer.update(&inner_hash);
+        let result = outer.finalize();
+        opad_key.zeroize();
+        result
+    }
+}
+
+impl zeroize::Zeroize for HmacSm3 {
+    fn zeroize(&mut self) {
+        self.opad_key.zeroize();
+        // inner 的 Sm3Hasher 不含密钥材料，无需特殊清零
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "alloc")]
+    extern crate alloc;
     use super::*;
 
     /// GB/T 32905-2016 附录 A 示例 1：SM3("abc")
@@ -319,6 +391,26 @@ mod tests {
         h.update(b"test");
         let d2 = h.finalize_reset();
         assert_eq!(d1, d2);
+    }
+
+    /// HmacSm3 流式接口与 hmac_sm3 单次接口结果一致
+    #[test]
+    fn test_hmac_sm3_streaming_equals_oneshot() {
+        let key = b"streaming-key";
+        let parts: &[&[u8]] = &[b"hello", b" ", b"world"];
+
+        let mut all = alloc::vec![];
+        for p in parts {
+            all.extend_from_slice(p);
+        }
+        let expected = hmac_sm3(key, &all);
+
+        let mut h = HmacSm3::new(key);
+        for p in parts {
+            h.update(p);
+        }
+        let got = h.finalize();
+        assert_eq!(expected, got);
     }
 
     // 辅助：从十六进制字符串构造 [u8; 32]

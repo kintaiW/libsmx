@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-03-09
+
+### Added
+
+- **rustls CryptoProvider** (`rustls_provider` module, requires `rustls` feature)
+  - Full rustls 0.23.x `CryptoProvider` implementation for TLCP (Chinese TLS)
+  - `hash.rs`: SM3 `Hash` and `Context` trait implementations
+  - `hmac.rs`: SM3 HMAC trait implementation
+  - `tls13.rs`: SM4-GCM/CCM AEAD cipher suites (TLS13_SM4_GCM_SM3, TLS13_SM4_CCM_SM3)
+  - `kx.rs`: SM2 ECDHE key exchange
+  - `sign.rs`: SM2 signing algorithm
+  - `verify.rs`: SM2 signature verification
+  - `mod.rs`: `crypto_provider()` function returning complete `CryptoProvider`
+- **SM3 streaming HMAC** (`HmacSm3`)
+  - `update()`: Streaming data input
+  - `finalize()`: Final HMAC computation
+- **SM2 SPKI DER encoding**
+  - `public_key_to_spki_der()`: Encode public key as RFC 5480 SubjectPublicKeyInfo
+- **SM2 DEFAULT_ID constant**
+  - `DEFAULT_ID`: Default user ID "1234567812345678" (16 bytes)
+
+### Changed
+
+- `Cargo.toml`: Added `rustls` optional feature with dependencies
+
 ## [0.2.1] - 2025-03-08
 
 ### Added
@@ -120,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - XTS: reject non-16-byte-aligned input instead of silently truncating
 - SM9 `hash_to_range`: replaced variable-iteration `while` loop with constant-time conditional select
 
+[0.3.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.3.0
 [0.2.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.0
 [0.1.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.1

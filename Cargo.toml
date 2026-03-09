@@ -1,6 +1,6 @@
 [package]
 name = "libsmx"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.83.0"
 license = "Apache-2.0"
@@ -35,11 +35,16 @@ crypto-bigint = { version = "0.6", default-features = false }
 subtle    = { version = "2.6", default-features = false }
 zeroize   = { version = "1.8", default-features = false, features = ["derive"] }
 rand_core = { version = "0.6", default-features = false }
+rustls    = { version = "0.24.0-dev.0", path = "../rustls/rustls", optional = true, default-features = false }
+pki-types = { package = "rustls-pki-types", version = "1", optional = true, features = ["alloc"] }
+getrandom = { version = "0.2", optional = true }
 
 [features]
 default = ["alloc"]
 alloc = []
 std = ["alloc", "rand_core/std"]
+# rustls CryptoProvider 集成（RFC 8998 国密 TLS 套件）
+rustls-provider = ["alloc", "dep:rustls", "dep:pki-types", "dep:getrandom"]
 
 [dev-dependencies]
 hex       = "0.4"

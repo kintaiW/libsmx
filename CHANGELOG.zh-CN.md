@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] - 2025-03-09
+
+### 新增
+
+- **rustls CryptoProvider**（`rustls_provider` 模块，需 `rustls` 特性）
+  - 完整的 rustls 0.23.x `CryptoProvider` 实现，支持 TLCP（国密 TLS）
+  - `hash.rs`：SM3 `Hash` 和 `Context` trait 实现
+  - `hmac.rs`：SM3 HMAC trait 实现
+  - `tls13.rs`：SM4-GCM/CCM AEAD 密码套件（TLS13_SM4_GCM_SM3、TLS13_SM4_CCM_SM3）
+  - `kx.rs`：SM2 ECDHE 密钥交换
+  - `sign.rs`：SM2 签名算法
+  - `verify.rs`：SM2 验签算法
+  - `mod.rs`：`crypto_provider()` 函数返回完整 `CryptoProvider`
+- **SM3 流式 HMAC**（`HmacSm3`）
+  - `update()`：流式数据输入
+  - `finalize()`：最终 HMAC 计算
+- **SM2 SPKI DER 编码**
+  - `public_key_to_spki_der()`：将公钥编码为 RFC 5480 SubjectPublicKeyInfo
+- **SM2 DEFAULT_ID 常量**
+  - `DEFAULT_ID`：默认用户 ID "1234567812345678"（16 字节）
+
+### 变更
+
+- `Cargo.toml`：添加 `rustls` 可选特性及依赖
+
 ## [0.2.1] - 2025-03-08
 
 ### 新增
@@ -118,6 +143,7 @@
 - XTS：拒绝非 16 字节对齐输入，而非静默截断
 - SM9 `hash_to_range`：用常量时间条件选择替换可变迭代 `while` 循环
 
+[0.3.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.3.0
 [0.2.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kintaiW/libsmx/releases/tag/v0.2.0
 [0.1.1]: https://github.com/kintaiW/libsmx/releases/tag/v0.1.1

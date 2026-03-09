@@ -61,3 +61,6 @@ pub mod sm9;
 pub mod bls;
 
 pub mod fpe;
+
+#[cfg(feature = "rustls-provider")]
+pub mod rustls_provider;
