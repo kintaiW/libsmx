@@ -71,6 +71,8 @@ impl TicketerFactory for SmTicketerFactory {
     fn ticketer(&self) -> Result<Arc<dyn TicketProducer>, Error> {
         // Reason: TLS session ticket 加密暂不支持，返回错误；
         //   后续可用 SM4-GCM 实现 ticket 加密
-        Err(Error::General("SM ticket factory not yet implemented".into()))
+        Err(Error::General(
+            "SM ticket factory not yet implemented".into(),
+        ))
     }
 }

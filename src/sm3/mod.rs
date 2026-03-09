@@ -291,8 +291,6 @@ impl zeroize::Zeroize for HmacSm3 {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "alloc")]
-    extern crate alloc;
     use super::*;
 
     /// GB/T 32905-2016 附录 A 示例 1：SM3("abc")
@@ -399,11 +397,7 @@ mod tests {
         let key = b"streaming-key";
         let parts: &[&[u8]] = &[b"hello", b" ", b"world"];
 
-        let mut all = alloc::vec![];
-        for p in parts {
-            all.extend_from_slice(p);
-        }
-        let expected = hmac_sm3(key, &all);
+        let expected = hmac_sm3(key, b"hello world");
 
         let mut h = HmacSm3::new(key);
         for p in parts {

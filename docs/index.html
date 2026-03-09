@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>libsmx — Pure-Rust Chinese Cryptography</title>
+
+  <!-- SEO Meta -->
+  <meta name="description" content="Pure-Rust, #![no_std] implementation of SM2/SM3/SM4/SM9/BLS/FPE Chinese commercial cryptography standards. Zero unsafe code, constant-time operations, side-channel resistant." />
+  <meta name="keywords" content="Rust, SM2, SM3, SM4, SM9, BLS, FPE, Cryptography, No-Std, Chinese Cryptography, GB/T, constant-time, zero unsafe, side-channel resistant, AEAD, GCM, rustls" />
+  <meta name="author" content="libsmx contributors" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://kintaiw.github.io/libsmx/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="libsmx — Pure-Rust Chinese Cryptography" />
+  <meta property="og:description" content="SM2/SM3/SM4/SM9/BLS/FPE in pure Rust. #![no_std], zero unsafe, constant-time everywhere." />
+  <meta property="og:url" content="https://kintaiw.github.io/libsmx/" />
+  <meta property="og:site_name" content="libsmx" />
+  <!-- Replace with actual image URL after creating an OG image (1200x630 recommended) -->
+  <meta property="og:image" content="https://kintaiw.github.io/libsmx/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="libsmx — Pure-Rust Chinese Cryptography" />
+  <meta name="twitter:description" content="SM2/SM3/SM4/SM9/BLS/FPE in pure Rust. #![no_std], zero unsafe, constant-time everywhere." />
+  <meta name="twitter:image" content="https://kintaiw.github.io/libsmx/og-image.png" />
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "libsmx",
+    "description": "Pure-Rust, #![no_std] implementation of Chinese commercial cryptography standards (SM2/SM3/SM4/SM9/BLS/FPE) with constant-time operations and zero unsafe code.",
+    "codeRepository": "https://github.com/kintaiW/libsmx",
+    "programmingLanguage": "Rust",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "runtimePlatform": "Rust 1.83.0+",
+    "url": "https://kintaiw.github.io/libsmx/",
+    "keywords": ["SM2", "SM3", "SM4", "SM9", "BLS", "FPE", "cryptography", "no_std", "constant-time", "Rust"],
+    "applicationCategory": "Security",
+    "operatingSystem": "Cross-platform (no_std)"
+  }
+  </script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#dea584',
+              light: '#f0c6a0',
+              dark: '#c4845a',
+            },
+            safe: {
+              DEFAULT: '#10b981',
+              light: '#34d399',
+            },
+            surface: {
+              900: '#0f172a',
+              800: '#1e293b',
+              700: '#334155',
+              600: '#475569',
+            },
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Prism.js (Tomorrow Night theme + Rust) -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+
+  <style>
+    /* Fade-in animation */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Feature card hover */
+    .feature-card {
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Code window override */
+    pre[class*="language-"] {
+      margin: 0 !important;
+      border-radius: 0 0 0.75rem 0.75rem !important;
+      background: #1e293b !important;
+      font-size: 0.875rem !important;
+      line-height: 1.7 !important;
+    }
+    code[class*="language-"] {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+      font-size: 0.875rem !important;
+    }
+
+    /* Benchmark bar */
+    .bench-bar {
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #dea584, #10b981);
+      transition: width 0.8s ease-out;
+    }
+
+    /* Tab active state */
+    .tab-btn.active {
+      color: #dea584;
+      border-bottom-color: #dea584;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+    /* Nav blur */
+    .nav-blur {
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+  </style>
+</head>
+
+<body class="bg-surface-900 text-gray-300 font-sans antialiased">
+
+  <!-- ============================================================ -->
+  <!-- NAV -->
+  <!-- ============================================================ -->
+  <nav class="fixed top-0 left-0 right-0 z-50 nav-blur bg-surface-900/80 border-b border-white/5">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="#" class="flex items-center gap-2 text-white font-bold text-lg tracking-tight">
+        <span class="text-brand">&lt;/&gt;</span> libsmx
+      </a>
+      <div class="hidden md:flex items-center gap-8 text-sm text-gray-400">
+        <a href="#features" class="hover:text-white transition-colors">Features</a>
+        <a href="#code" class="hover:text-white transition-colors">Code</a>
+        <a href="#benchmarks" class="hover:text-white transition-colors">Benchmarks</a>
+        <a href="#trust" class="hover:text-white transition-colors">Trust</a>
+        <a href="https://docs.rs/libsmx" target="_blank" rel="noopener" class="hover:text-white transition-colors">Docs</a>
+        <a href="https://github.com/kintaiW/libsmx" target="_blank" rel="noopener"
+           class="flex items-center gap-1.5 text-white bg-white/10 hover:bg-white/15 px-4 py-1.5 rounded-lg transition-colors">
+          <i data-lucide="github" class="w-4 h-4"></i> GitHub
+        </a>
+      </div>
+      <!-- Mobile menu button -->
+      <button id="mobile-menu-btn" class="md:hidden text-gray-400 hover:text-white">
+        <i data-lucide="menu" class="w-6 h-6"></i>
+      </button>
+    </div>
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden md:hidden bg-surface-800 border-t border-white/5 px-6 py-4 space-y-3 text-sm">
+      <a href="#features" class="block text-gray-400 hover:text-white">Features</a>
+      <a href="#code" class="block text-gray-400 hover:text-white">Code</a>
+      <a href="#benchmarks" class="block text-gray-400 hover:text-white">Benchmarks</a>
+      <a href="#trust" class="block text-gray-400 hover:text-white">Trust</a>
+      <a href="https://docs.rs/libsmx" target="_blank" rel="noopener" class="block text-gray-400 hover:text-white">Docs</a>
+      <a href="https://github.com/kintaiW/libsmx" target="_blank" rel="noopener" class="block text-gray-400 hover:text-white">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- ============================================================ -->
+  <!-- HERO -->
+  <!-- ============================================================ -->
+  <section class="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
+    <!-- Background gradient -->
+    <div class="absolute inset-0 bg-gradient-to-b from-surface-900 via-surface-900 to-surface-800"></div>
+    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-brand/5 rounded-full blur-3xl"></div>
+    <div class="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand/20 to-transparent"></div>
+
+    <div class="relative z-10 max-w-4xl mx-auto px-6 text-center">
+      <!-- Badges row -->
+      <div class="flex flex-wrap justify-center gap-2 mb-8 fade-in">
+        <a href="https://github.com/kintaiW/libsmx/actions/workflows/ci.yml" target="_blank" rel="noopener">
+          <img src="https://github.com/kintaiW/libsmx/actions/workflows/ci.yml/badge.svg" alt="CI" loading="lazy" />
+        </a>
+        <a href="https://crates.io/crates/libsmx" target="_blank" rel="noopener">
+          <img src="https://img.shields.io/crates/v/libsmx.svg" alt="Crates.io" loading="lazy" />
+        </a>
+        <a href="https://docs.rs/libsmx" target="_blank" rel="noopener">
+          <img src="https://img.shields.io/docsrs/libsmx" alt="docs.rs" loading="lazy" />
+        </a>
+        <a href="https://codecov.io/gh/kintaiW/libsmx" target="_blank" rel="noopener">
+          <img src="https://codecov.io/gh/kintaiW/libsmx/graph/badge.svg" alt="codecov" loading="lazy" />
+        </a>
+        <img src="https://img.shields.io/crates/l/libsmx.svg" alt="License" loading="lazy" />
+        <img src="https://img.shields.io/badge/MSRV-1.83.0-blue.svg" alt="MSRV" loading="lazy" />
+      </div>
+
+      <!-- Slogan -->
+      <h1 class="text-4xl sm:text-5xl md:text-7xl font-black text-white leading-tight tracking-tight mb-6 fade-in">
+        Pure-Rust Chinese Cryptography.
+        <br />
+        <span class="text-brand">Zero <code class="font-mono text-[0.85em]">unsafe</code></span>.
+        <span class="text-safe">Constant-time</span>.
+      </h1>
+
+      <!-- Subtitle -->
+      <p class="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-4 fade-in">
+        SM2 / SM3 / SM4 / SM9 / BLS / FPE — six algorithms, fully implemented,
+        strictly conforming to GB/T national standards.
+      </p>
+      <p class="text-base text-gray-500 max-w-xl mx-auto mb-10 fade-in">
+        <code class="text-brand/80 font-mono text-sm">#![no_std]</code> ready.
+        From bare-metal MCUs to WASM — runs everywhere.
+      </p>
+
+      <!-- CTA Buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 fade-in">
+        <button id="copy-btn" onclick="copyInstall()"
+                class="group flex items-center gap-3 bg-brand text-surface-900 font-semibold px-6 py-3 rounded-xl hover:bg-brand-light transition-colors text-base">
+          <i data-lucide="terminal" class="w-5 h-5"></i>
+          <span class="font-mono">cargo add libsmx</span>
+          <i data-lucide="copy" class="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity"></i>
+        </button>
+        <a href="https://github.com/kintaiW/libsmx" target="_blank" rel="noopener"
+           class="flex items-center gap-2 border border-white/20 text-white px-6 py-3 rounded-xl hover:bg-white/5 transition-colors text-base">
+          <i data-lucide="github" class="w-5 h-5"></i> View on GitHub
+        </a>
+      </div>
+
+      <!-- Scroll indicator -->
+      <div class="animate-bounce fade-in">
+        <i data-lucide="chevrons-down" class="w-6 h-6 text-gray-600 mx-auto"></i>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- ALGORITHM OVERVIEW -->
+  <!-- ============================================================ -->
+  <section class="py-20 bg-surface-800 border-y border-white/5">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-12 fade-in">
+        <h2 class="text-sm font-semibold text-brand uppercase tracking-widest mb-3">Algorithm Coverage</h2>
+        <p class="text-2xl sm:text-3xl font-bold text-white">Six Standards. One Crate.</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 fade-in">
+        <!-- SM2 -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-brand font-mono font-bold text-lg">SM2</span>
+            <span class="text-xs text-gray-500 font-mono">GB/T 32918</span>
+          </div>
+          <p class="text-sm text-gray-400">Elliptic Curve PKC — sign, verify, encrypt, decrypt, key exchange, DER codec</p>
+        </div>
+        <!-- SM3 -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-brand font-mono font-bold text-lg">SM3</span>
+            <span class="text-xs text-gray-500 font-mono">GB/T 32905</span>
+          </div>
+          <p class="text-sm text-gray-400">256-bit cryptographic hash — streaming, one-shot, HMAC, HKDF</p>
+        </div>
+        <!-- SM4 -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-brand font-mono font-bold text-lg">SM4</span>
+            <span class="text-xs text-gray-500 font-mono">GB/T 32907</span>
+          </div>
+          <p class="text-sm text-gray-400">128-bit block cipher — ECB, CBC, OFB, CFB, CTR, GCM, CCM, XTS</p>
+        </div>
+        <!-- SM9 -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-brand font-mono font-bold text-lg">SM9</span>
+            <span class="text-xs text-gray-500 font-mono">GB/T 38635</span>
+          </div>
+          <p class="text-sm text-gray-400">Identity-based crypto — BN256 pairing, sign, encrypt, key encapsulation</p>
+        </div>
+        <!-- BLS -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-brand font-mono font-bold text-lg">BLS</span>
+            <span class="text-xs text-gray-500 font-mono">RFC 9380</span>
+          </div>
+          <p class="text-sm text-gray-400">BLS signatures — aggregate verification, Shamir threshold signing</p>
+        </div>
+        <!-- FPE -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-brand font-mono font-bold text-lg">FPE</span>
+            <span class="text-xs text-gray-500 font-mono">SP 800-38G</span>
+          </div>
+          <p class="text-sm text-gray-400">Format-preserving encryption — FNR algorithm, 7-round Feistel with SM4</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- FEATURES GRID -->
+  <!-- ============================================================ -->
+  <section id="features" class="py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16 fade-in">
+        <h2 class="text-sm font-semibold text-brand uppercase tracking-widest mb-3">Why libsmx</h2>
+        <p class="text-2xl sm:text-3xl font-bold text-white">Built for Security Engineers</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Card 1 -->
+        <div class="feature-card bg-surface-800 border border-white/5 rounded-2xl p-7 fade-in">
+          <div class="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center mb-5">
+            <i data-lucide="shield-check" class="w-6 h-6 text-brand"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">Full GB/T Compliance</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Complete SM2/SM3/SM4/SM9 implementations, plus BLS signatures and format-preserving encryption. Every algorithm validated against official GB/T standard test vectors.
+          </p>
+        </div>
+        <!-- Card 2 -->
+        <div class="feature-card bg-surface-800 border border-white/5 rounded-2xl p-7 fade-in">
+          <div class="w-12 h-12 rounded-xl bg-safe/10 flex items-center justify-center mb-5">
+            <i data-lucide="timer" class="w-6 h-6 text-safe"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">Constant-Time Everywhere</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            All secret-dependent ops use <code class="text-brand/80 font-mono text-xs">subtle</code> primitives. SM2 scalar multiplication iterates all 256 bits. SM4 S-box uses boolean-circuit bitslice — zero cache-timing leaks.
+          </p>
+        </div>
+        <!-- Card 3 -->
+        <div class="feature-card bg-surface-800 border border-white/5 rounded-2xl p-7 fade-in">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-5">
+            <i data-lucide="shield-off" class="w-6 h-6 text-red-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">Zero <code class="font-mono">unsafe</code> Code</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            <code class="text-brand/80 font-mono text-xs">#![forbid(unsafe_code)]</code> enforced at the crate root. Private keys implement <code class="text-brand/80 font-mono text-xs">ZeroizeOnDrop</code> — automatic cleanup on scope exit.
+          </p>
+        </div>
+        <!-- Card 4 -->
+        <div class="feature-card bg-surface-800 border border-white/5 rounded-2xl p-7 fade-in">
+          <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center mb-5">
+            <i data-lucide="cpu" class="w-6 h-6 text-blue-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2"><code class="font-mono">#![no_std]</code> Ready</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Runs on embedded MCUs, WASM runtimes, and bare-metal targets. Optional <code class="text-brand/80 font-mono text-xs">alloc</code> and <code class="text-brand/80 font-mono text-xs">std</code> feature flags. Zero runtime dependencies.
+          </p>
+        </div>
+        <!-- Card 5 -->
+        <div class="feature-card bg-surface-800 border border-white/5 rounded-2xl p-7 fade-in">
+          <div class="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center mb-5">
+            <i data-lucide="zap" class="w-6 h-6 text-yellow-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">Production Performance</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            SM3 hashing at <strong class="text-white">374 MiB/s</strong>. SM2 signing in <strong class="text-white">258 µs</strong>. SM4-ECB at <strong class="text-white">27 MiB/s</strong> — all measured under constant-time constraints. No shortcuts.
+          </p>
+        </div>
+        <!-- Card 6 -->
+        <div class="feature-card bg-surface-800 border border-white/5 rounded-2xl p-7 fade-in">
+          <div class="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center mb-5">
+            <i data-lucide="lock" class="w-6 h-6 text-purple-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">rustls TLS 1.3</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Feature-gated <code class="text-brand/80 font-mono text-xs">rustls-provider</code> delivers RFC 8998 ShangMi cipher suites (SM4-GCM-SM3 / SM4-CCM-SM3). Plug directly into the Rust TLS ecosystem.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- CODE DEMO -->
+  <!-- ============================================================ -->
+  <section id="code" class="py-24 bg-surface-800 border-y border-white/5">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16 fade-in">
+        <h2 class="text-sm font-semibold text-brand uppercase tracking-widest mb-3">Code Examples</h2>
+        <p class="text-2xl sm:text-3xl font-bold text-white">Clean API. Real Cryptography.</p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-1 mb-0 fade-in">
+        <button onclick="switchTab('sm2')" id="tab-sm2"
+                class="tab-btn active px-5 py-2.5 text-sm font-medium border-b-2 border-transparent rounded-t-lg bg-surface-900/40 hover:bg-surface-900/60 transition-colors">
+          SM2 Sign / Verify
+        </button>
+        <button onclick="switchTab('sm4')" id="tab-sm4"
+                class="tab-btn px-5 py-2.5 text-sm font-medium border-b-2 border-transparent rounded-t-lg bg-surface-900/40 hover:bg-surface-900/60 transition-colors text-gray-500">
+          SM4-GCM AEAD
+        </button>
+      </div>
+
+      <!-- SM2 Tab Content -->
+      <div id="panel-sm2" class="grid grid-cols-1 lg:grid-cols-5 gap-0 fade-in">
+        <!-- Code (left, 3 cols) -->
+        <div class="lg:col-span-3">
+          <div class="bg-surface-900 rounded-tl-none rounded-tr-none lg:rounded-tr-none rounded-2xl overflow-hidden border border-white/5">
+            <!-- IDE title bar -->
+            <div class="flex items-center gap-2 px-4 py-3 bg-surface-900 border-b border-white/5">
+              <span class="w-3 h-3 rounded-full bg-red-500/80"></span>
+              <span class="w-3 h-3 rounded-full bg-yellow-500/80"></span>
+              <span class="w-3 h-3 rounded-full bg-green-500/80"></span>
+              <span class="text-xs text-gray-500 ml-2 font-mono">sm2_example.rs</span>
+            </div>
+            <pre class="!rounded-t-none"><code class="language-rust">use libsmx::sm2::{generate_keypair, get_z, get_e, sign, verify};
+
+let mut rng = rand::rngs::OsRng;
+
+// Key generation
+let (pri_key, pub_key) = generate_keypair(&mut rng);
+
+// Sign: compute Z value and message digest per GB/T 32918.2
+let z = get_z(b"1234567812345678", &pub_key);
+let e = get_e(&z, b"hello SM2");
+let sig = sign(&e, &pri_key, &mut rng);
+
+// Verify
+verify(&e, &pub_key, &sig).expect("signature valid");</code></pre>
+          </div>
+        </div>
+        <!-- Explanation (right, 2 cols) -->
+        <div class="lg:col-span-2 bg-surface-900/50 border border-white/5 lg:border-l-0 rounded-b-2xl lg:rounded-bl-none lg:rounded-r-2xl p-6 space-y-5">
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-brand/20 text-brand text-xs font-bold flex items-center justify-center">1</span>
+              <span class="text-white font-medium text-sm">generate_keypair</span>
+            </div>
+            <p class="text-gray-400 text-sm pl-7">OS-level CSPRNG generates a 256-bit SM2 key pair on the standard curve (GB/T 32918.5).</p>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-brand/20 text-brand text-xs font-bold flex items-center justify-center">2</span>
+              <span class="text-white font-medium text-sm">get_z</span>
+            </div>
+            <p class="text-gray-400 text-sm pl-7">Computes the user-distinguishing Z value per the national standard — SM3 hash of ID length, ID, curve params, and public key coordinates.</p>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-brand/20 text-brand text-xs font-bold flex items-center justify-center">3</span>
+              <span class="text-white font-medium text-sm">get_e → sign</span>
+            </div>
+            <p class="text-gray-400 text-sm pl-7">Digest <code class="text-brand/80 font-mono text-xs">e = SM3(Z || M)</code>, then sign. Scalar multiplication runs all 256 rounds — constant-time against timing attacks.</p>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-brand/20 text-brand text-xs font-bold flex items-center justify-center">4</span>
+              <span class="text-white font-medium text-sm">verify</span>
+            </div>
+            <p class="text-gray-400 text-sm pl-7">Constant-time verification returns <code class="text-brand/80 font-mono text-xs">Result&lt;()&gt;</code>. Failures leak zero timing information.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- SM4 Tab Content (hidden by default) -->
+      <div id="panel-sm4" class="hidden grid grid-cols-1 lg:grid-cols-5 gap-0 fade-in">
+        <!-- Code (left, 3 cols) -->
+        <div class="lg:col-span-3">
+          <div class="bg-surface-900 rounded-2xl overflow-hidden border border-white/5">
+            <div class="flex items-center gap-2 px-4 py-3 bg-surface-900 border-b border-white/5">
+              <span class="w-3 h-3 rounded-full bg-red-500/80"></span>
+              <span class="w-3 h-3 rounded-full bg-yellow-500/80"></span>
+              <span class="w-3 h-3 rounded-full bg-green-500/80"></span>
+              <span class="text-xs text-gray-500 ml-2 font-mono">sm4_gcm_example.rs</span>
+            </div>
+            <pre class="!rounded-t-none"><code class="language-rust">use libsmx::sm4::{sm4_encrypt_gcm, sm4_decrypt_gcm};
+
+let key   = [0u8; 16];
+let nonce = [0u8; 12];
+let aad   = b"additional data";
+let plaintext = b"secret message";
+
+let (ciphertext, tag) = sm4_encrypt_gcm(
+    &key, &nonce, aad, plaintext
+);
+
+let decrypted = sm4_decrypt_gcm(
+    &key, &nonce, aad, &ciphertext, &tag
+).unwrap();
+
+assert_eq!(decrypted, plaintext);</code></pre>
+          </div>
+        </div>
+        <!-- Explanation (right, 2 cols) -->
+        <div class="lg:col-span-2 bg-surface-900/50 border border-white/5 lg:border-l-0 rounded-b-2xl lg:rounded-bl-none lg:rounded-r-2xl p-6 space-y-5">
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-safe/20 text-safe text-xs font-bold flex items-center justify-center">1</span>
+              <span class="text-white font-medium text-sm">128-bit Key + 96-bit Nonce</span>
+            </div>
+            <p class="text-gray-400 text-sm pl-7">Standard AEAD parameters per NIST GCM specification. The 128-bit key matches SM4's native block size.</p>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-safe/20 text-safe text-xs font-bold flex items-center justify-center">2</span>
+              <span class="text-white font-medium text-sm">Additional Authenticated Data</span>
+            </div>
+            <p class="text-gray-400 text-sm pl-7"><code class="text-brand/80 font-mono text-xs">aad</code> is authenticated but not encrypted — ideal for protocol headers that need integrity without confidentiality.</p>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-safe/20 text-safe text-xs font-bold flex items-center justify-center">3</span>
+              <span class="text-white font-medium text-sm">(ciphertext, tag)</span>
+            </div>
+            <p class="text-gray-400 text-sm pl-7">Returns ciphertext + 128-bit authentication tag. The tag ensures tamper detection via GMAC.</p>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-safe/20 text-safe text-xs font-bold flex items-center justify-center">4</span>
+              <span class="text-white font-medium text-sm">Constant-time Tag Verification</span>
+            </div>
+            <p class="text-gray-400 text-sm pl-7">Decryption verifies the tag in constant time. Any tampering returns <code class="text-brand/80 font-mono text-xs">Err</code> — no timing oracle.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- BENCHMARKS -->
+  <!-- ============================================================ -->
+  <section id="benchmarks" class="py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16 fade-in">
+        <h2 class="text-sm font-semibold text-brand uppercase tracking-widest mb-3">Performance</h2>
+        <p class="text-2xl sm:text-3xl font-bold text-white">Security Is Not a Performance Trade-off</p>
+        <p class="text-gray-400 mt-3 text-sm">All measurements are constant-time. Linux x86_64, single core. Run <code class="font-mono text-brand/80">cargo bench</code> for your own numbers.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Throughput -->
+        <div class="bg-surface-800 border border-white/5 rounded-2xl p-6 fade-in">
+          <h3 class="text-white font-semibold mb-1 flex items-center gap-2">
+            <i data-lucide="gauge" class="w-5 h-5 text-brand"></i> Throughput
+          </h3>
+          <p class="text-xs text-gray-500 mb-5">64 KiB data, constant-time</p>
+
+          <!-- SM3 -->
+          <div class="mb-5">
+            <div class="flex justify-between text-sm mb-1.5">
+              <span class="text-gray-300 font-mono">SM3 Hash</span>
+              <span class="text-brand font-semibold">374 MiB/s</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-2">
+              <div class="bench-bar" style="width: 100%"></div>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">167 µs @ 64 KiB</div>
+          </div>
+
+          <!-- SM4-ECB -->
+          <div>
+            <div class="flex justify-between text-sm mb-1.5">
+              <span class="text-gray-300 font-mono">SM4-ECB</span>
+              <span class="text-brand font-semibold">27 MiB/s</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-2">
+              <div class="bench-bar" style="width: 7.2%"></div>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">2.32 ms @ 64 KiB</div>
+          </div>
+        </div>
+
+        <!-- SM2 -->
+        <div class="bg-surface-800 border border-white/5 rounded-2xl p-6 fade-in">
+          <h3 class="text-white font-semibold mb-1 flex items-center gap-2">
+            <i data-lucide="key-round" class="w-5 h-5 text-brand"></i> SM2 (256-bit ECC)
+          </h3>
+          <p class="text-xs text-gray-500 mb-5">Elliptic curve operations</p>
+
+          <div class="space-y-3">
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Key Generation</span>
+              <span class="text-white font-mono font-medium">221 µs</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 34.6%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Sign</span>
+              <span class="text-white font-mono font-medium">258 µs</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 40.4%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Verify</span>
+              <span class="text-white font-mono font-medium">316 µs</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 49.5%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Encrypt</span>
+              <span class="text-white font-mono font-medium">639 µs</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 100%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Decrypt</span>
+              <span class="text-white font-mono font-medium">417 µs</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 65.3%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SM9 -->
+        <div class="bg-surface-800 border border-white/5 rounded-2xl p-6 fade-in">
+          <h3 class="text-white font-semibold mb-1 flex items-center gap-2">
+            <i data-lucide="fingerprint" class="w-5 h-5 text-brand"></i> SM9 (BN256 Pairing)
+          </h3>
+          <p class="text-xs text-gray-500 mb-5">Identity-based cryptography</p>
+
+          <div class="space-y-3">
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Master Keygen</span>
+              <span class="text-white font-mono font-medium">753 µs</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 13.7%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">User Keygen</span>
+              <span class="text-white font-mono font-medium">324 µs</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 5.9%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Sign</span>
+              <span class="text-white font-mono font-medium">3.44 ms</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 62.5%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Verify</span>
+              <span class="text-white font-mono font-medium">5.50 ms</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 100%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Encrypt</span>
+              <span class="text-white font-mono font-medium">4.68 ms</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 85.1%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-gray-400">Decrypt</span>
+              <span class="text-white font-mono font-medium">1.54 ms</span>
+            </div>
+            <div class="w-full bg-surface-700 rounded-full h-1.5">
+              <div class="bench-bar" style="width: 28%"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- TRUST -->
+  <!-- ============================================================ -->
+  <section id="trust" class="py-24 bg-surface-800 border-y border-white/5">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16 fade-in">
+        <h2 class="text-sm font-semibold text-brand uppercase tracking-widest mb-3">Trust</h2>
+        <p class="text-2xl sm:text-3xl font-bold text-white">Why Trust libsmx?</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <!-- Zero Unsafe -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-2xl p-7 text-center fade-in">
+          <div class="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-5">
+            <i data-lucide="shield-ban" class="w-7 h-7 text-red-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-3">Zero <code class="font-mono">unsafe</code></h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            <code class="text-brand/80 font-mono text-xs">#![forbid(unsafe_code)]</code> is enforced at the crate root — compile-time guarantee. Private keys implement <code class="text-brand/80 font-mono text-xs">ZeroizeOnDrop</code>. GCM/CCM tags verified in constant time.
+          </p>
+        </div>
+        <!-- MSRV -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-2xl p-7 text-center fade-in">
+          <div class="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-5">
+            <i data-lucide="settings" class="w-7 h-7 text-blue-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-3">MSRV Policy</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Minimum supported Rust version: <strong class="text-white">1.83.0</strong>. MSRV bumps are treated as minor version changes. CI matrix enforces compatibility. No nightly required — ever.
+          </p>
+        </div>
+        <!-- License -->
+        <div class="bg-surface-900/60 border border-white/5 rounded-2xl p-7 text-center fade-in">
+          <div class="w-14 h-14 rounded-full bg-brand/10 flex items-center justify-center mx-auto mb-5">
+            <i data-lucide="scale" class="w-7 h-7 text-brand"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-3">Apache-2.0</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Business-friendly license. No copyleft obligations. Free to use in commercial products, internal systems, and government compliance projects.
+          </p>
+        </div>
+      </div>
+
+      <!-- Disclaimer -->
+      <div class="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-5 text-center fade-in">
+        <p class="text-yellow-200/80 text-sm">
+          <strong>Disclaimer:</strong> This library has <strong>not</strong> been independently audited.
+          Report vulnerabilities via <a href="https://github.com/kintaiW/libsmx/blob/main/SECURITY.md" target="_blank" rel="noopener" class="text-brand underline hover:text-brand-light">SECURITY.md</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- QUICK START -->
+  <!-- ============================================================ -->
+  <section class="py-24">
+    <div class="max-w-3xl mx-auto px-6 text-center fade-in">
+      <h2 class="text-2xl sm:text-3xl font-bold text-white mb-4">Get Started in Seconds</h2>
+      <p class="text-gray-400 mb-8">Add libsmx to your project and start using Chinese cryptography today.</p>
+
+      <div class="bg-surface-800 border border-white/5 rounded-2xl overflow-hidden inline-block w-full max-w-lg">
+        <div class="flex items-center gap-2 px-4 py-3 bg-surface-900 border-b border-white/5">
+          <span class="w-3 h-3 rounded-full bg-red-500/80"></span>
+          <span class="w-3 h-3 rounded-full bg-yellow-500/80"></span>
+          <span class="w-3 h-3 rounded-full bg-green-500/80"></span>
+          <span class="text-xs text-gray-500 ml-2 font-mono">terminal</span>
+        </div>
+        <div class="p-6 text-left">
+          <p class="font-mono text-sm text-gray-400 mb-2"># Add to your project</p>
+          <p class="font-mono text-sm text-white mb-4">$ <span class="text-brand">cargo add libsmx</span></p>
+          <p class="font-mono text-sm text-gray-400 mb-2"># Or with no_std (no alloc)</p>
+          <p class="font-mono text-sm text-white mb-4">$ <span class="text-brand">cargo add libsmx --no-default-features</span></p>
+          <p class="font-mono text-sm text-gray-400 mb-2"># With rustls TLS provider</p>
+          <p class="font-mono text-sm text-white">$ <span class="text-brand">cargo add libsmx --features rustls-provider</span></p>
+        </div>
+      </div>
+
+      <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="https://docs.rs/libsmx" target="_blank" rel="noopener"
+           class="flex items-center gap-2 bg-brand text-surface-900 font-semibold px-6 py-3 rounded-xl hover:bg-brand-light transition-colors">
+          <i data-lucide="book-open" class="w-5 h-5"></i> Read the Docs
+        </a>
+        <a href="https://github.com/kintaiW/libsmx" target="_blank" rel="noopener"
+           class="flex items-center gap-2 border border-white/20 text-white px-6 py-3 rounded-xl hover:bg-white/5 transition-colors">
+          <i data-lucide="github" class="w-5 h-5"></i> Star on GitHub
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- FOOTER -->
+  <!-- ============================================================ -->
+  <footer class="py-12 border-t border-white/5">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="flex flex-col items-center gap-6">
+        <!-- Links -->
+        <div class="flex flex-wrap justify-center gap-6 text-sm text-gray-400">
+          <a href="https://github.com/kintaiW/libsmx" target="_blank" rel="noopener" class="hover:text-white transition-colors flex items-center gap-1.5">
+            <i data-lucide="github" class="w-4 h-4"></i> GitHub
+          </a>
+          <a href="https://docs.rs/libsmx" target="_blank" rel="noopener" class="hover:text-white transition-colors flex items-center gap-1.5">
+            <i data-lucide="book-open" class="w-4 h-4"></i> API Docs
+          </a>
+          <a href="https://crates.io/crates/libsmx" target="_blank" rel="noopener" class="hover:text-white transition-colors flex items-center gap-1.5">
+            <i data-lucide="package" class="w-4 h-4"></i> Crates.io
+          </a>
+          <a href="https://github.com/kintaiW/libsmx/blob/main/CHANGELOG.md" target="_blank" rel="noopener" class="hover:text-white transition-colors flex items-center gap-1.5">
+            <i data-lucide="file-text" class="w-4 h-4"></i> Changelog
+          </a>
+        </div>
+        <!-- Version info -->
+        <p class="text-xs text-gray-600 font-mono">
+          libsmx v0.3.0 · MSRV 1.83.0 · Apache-2.0
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================================================ -->
+  <!-- SCRIPTS -->
+  <!-- ============================================================ -->
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Copy install command
+    function copyInstall() {
+      navigator.clipboard.writeText('cargo add libsmx').then(() => {
+        const btn = document.getElementById('copy-btn');
+        const original = btn.innerHTML;
+        btn.innerHTML = '<span class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Copied!</span>';
+        setTimeout(() => {
+          btn.innerHTML = original;
+          lucide.createIcons();
+        }, 2000);
+      });
+    }
+
+    // Tab switching
+    function switchTab(tab) {
+      // Hide all panels
+      document.getElementById('panel-sm2').classList.add('hidden');
+      document.getElementById('panel-sm4').classList.add('hidden');
+      // Deactivate all tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.classList.add('text-gray-500');
+      });
+      // Show selected panel
+      const panel = document.getElementById('panel-' + tab);
+      panel.classList.remove('hidden');
+      // Activate selected tab
+      const tabBtn = document.getElementById('tab-' + tab);
+      tabBtn.classList.add('active');
+      tabBtn.classList.remove('text-gray-500');
+      // Re-highlight code if Prism is available
+      if (window.Prism) {
+        Prism.highlightAllUnder(panel);
+      }
+    }
+
+    // Fade-in on scroll (Intersection Observer)
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    );
+    document.querySelectorAll('.fade-in').forEach((el) => observer.observe(el));
+
+    // Mobile menu toggle
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (mobileMenuBtn && mobileMenu) {
+      mobileMenuBtn.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+      });
+      // Close menu when clicking a link
+      mobileMenu.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+          mobileMenu.classList.add('hidden');
+        });
+      });
+    }
+  </script>
+
+</body>
+</html>

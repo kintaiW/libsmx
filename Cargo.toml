@@ -3,13 +3,14 @@ name = "libsmx"
 version = "0.3.0"
 edition = "2021"
 rust-version = "1.83.0"
+authors = ["kintai <kintai@foxmail.com>"]
 license = "Apache-2.0"
 description = "Pure-Rust, no_std, constant-time SM2/SM3/SM4/SM9 Chinese cryptography (GB/T 32918/32905/32907/38635)"
 repository = "https://github.com/kintaiW/libsmx"
 documentation = "https://docs.rs/libsmx"
-homepage = "https://github.com/kintaiW/libsmx"
+homepage = "https://kintaiw.github.io/libsmx/"
 categories = ["cryptography", "no-std"]
-keywords = ["sm2", "sm3", "sm4", "sm9", "gmssl"]
+keywords = ["sm2", "sm3", "sm4", "sm9", "cryptography"]
 readme = "README.md"
 exclude = [
     "benches/",
@@ -35,7 +36,7 @@ crypto-bigint = { version = "0.6", default-features = false }
 subtle    = { version = "2.6", default-features = false }
 zeroize   = { version = "1.8", default-features = false, features = ["derive"] }
 rand_core = { version = "0.6", default-features = false }
-rustls    = { version = "0.24.0-dev.0", path = "../rustls/rustls", optional = true, default-features = false }
+rustls    = { git = "https://github.com/rustls/rustls.git", branch = "main", optional = true, default-features = false }
 pki-types = { package = "rustls-pki-types", version = "1", optional = true, features = ["alloc"] }
 getrandom = { version = "0.2", optional = true }
 
@@ -51,6 +52,9 @@ hex       = "0.4"
 criterion = { version = "0.5", features = ["html_reports"] }
 rand      = "0.8"
 sm9_core = "0.5.0"
+# rustls-provider 集成测试依赖（通过 feature 条件编译保护）
+rustls    = { git = "https://github.com/rustls/rustls.git", branch = "main", default-features = false, features = ["log", "webpki"] }
+pki-types = { package = "rustls-pki-types", version = "1", features = ["alloc"] }
 
 [[bench]]
 name    = "sm2_bench"

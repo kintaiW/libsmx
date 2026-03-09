@@ -3,7 +3,9 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use rustls::crypto::kx::{ActiveKeyExchange, NamedGroup, SharedSecret, StartedKeyExchange, SupportedKxGroup};
+use rustls::crypto::kx::{
+    ActiveKeyExchange, NamedGroup, SharedSecret, StartedKeyExchange, SupportedKxGroup,
+};
 use rustls::error::{Error, PeerMisbehaved};
 
 use crate::sm2::{generate_keypair, key_exchange::ecdh_from_slice, PrivateKey};
@@ -77,7 +79,57 @@ impl rand_core::RngCore for Sm2Rng {
         getrandom::getrandom(dest).map_err(|e| {
             // Reason: rand_core::Error::new 接受 NonZeroU32，直接用 getrandom 错误码
             use core::num::NonZeroU32;
-            rand_core::Error::from(NonZeroU32::new(e.raw_os_error().unwrap_or(1) as u32).unwrap_or(NonZeroU32::new(1).unwrap()))
+            rand_core::Error::from(
+                NonZeroU32::new(e.raw_os_error().unwrap_or(1) as u32)
+                    .unwrap_or(NonZeroU32::new(1).unwrap()),
+            )
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rustls::crypto::kx::NamedGroup;
+
+    use super::CURVE_SM2;
+
+    #[test]
+    fn test_name() {
+        assert_eq!(CURVE_SM2.name(), NamedGroup::curveSM2);
+    }
+
+    #[test]
+    fn test_ecdhe_roundtrip() {
+        // 模拟 TLS 握手：A 生成临时密钥对，B 生成临时密钥对，双方计算共享密钥
+        let kx_a = CURVE_SM2.start().unwrap().into_single();
+        let kx_b = CURVE_SM2.start().unwrap().into_single();
+
+        let pub_a = kx_a.pub_key().to_vec();
+        let pub_b = kx_b.pub_key().to_vec();
+
+        // 65 字节非压缩公钥（04 || x || y）
+        assert_eq!(pub_a.len(), 65);
+        assert_eq!(pub_b.len(), 65);
+        assert_eq!(pub_a[0], 0x04);
+
+        let secret_a = kx_a.complete(&pub_b).unwrap();
+        let secret_b = kx_b.complete(&pub_a).unwrap();
+
+        // 两端共享密钥必须相同（32 字节 x 坐标）
+        assert_eq!(secret_a.secret_bytes(), secret_b.secret_bytes());
+        assert_eq!(secret_a.secret_bytes().len(), 32);
+    }
+
+    #[test]
+    fn test_invalid_peer_key_rejected() {
+        let kx = CURVE_SM2.start().unwrap().into_single();
+        // 无效公钥（全零）应报错
+        let result = kx.complete(&[0u8; 65]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_no_ffdhe_group() {
+        assert!(CURVE_SM2.ffdhe_group().is_none());
     }
 }

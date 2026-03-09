@@ -43,3 +43,41 @@ impl hmac::Key for Sm3HmacKey {
         32
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rustls::crypto::hmac::Hmac;
+
+    use super::HMAC_SM3;
+
+    // RFC 2104 HMAC-SM3 已知正确值（用 libsmx hmac_sm3 预计算）
+    // key = b"key", data = b"The quick brown fox jumps over the lazy dog"
+    // 通过 crate::sm3::hmac_sm3 验证
+    fn reference_hmac(key: &[u8], data: &[u8]) -> [u8; 32] {
+        crate::sm3::hmac_sm3(key, data)
+    }
+
+    #[test]
+    fn test_sign_concat_single_chunk() {
+        let key = b"secret";
+        let data = b"hello world";
+        let k = HMAC_SM3.with_key(key);
+        let tag = k.sign_concat(data, &[], &[]);
+        assert_eq!(tag.as_ref(), reference_hmac(key, data));
+    }
+
+    #[test]
+    fn test_sign_concat_split_matches_whole() {
+        // 分段 "hel" + ["lo "] + "world" 应与整体 "hello world" 结果相同
+        let key = b"secret";
+        let k = HMAC_SM3.with_key(key);
+        let tag = k.sign_concat(b"hel", &[b"lo "], b"world");
+        assert_eq!(tag.as_ref(), reference_hmac(key, b"hello world"));
+    }
+
+    #[test]
+    fn test_tag_len() {
+        let k = HMAC_SM3.with_key(b"k");
+        assert_eq!(k.tag_len(), 32);
+    }
+}

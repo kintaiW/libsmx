@@ -4,9 +4,8 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use rustls::crypto::cipher::{
-    make_tls13_aad, AeadKey, EncodedMessage, InboundOpaque, Iv, MessageDecrypter,
-    MessageEncrypter, Nonce, OutboundOpaque, OutboundPlain, Tls13AeadAlgorithm,
-    UnsupportedOperationError, NONCE_LEN,
+    make_tls13_aad, AeadKey, EncodedMessage, InboundOpaque, Iv, MessageDecrypter, MessageEncrypter,
+    Nonce, OutboundOpaque, OutboundPlain, Tls13AeadAlgorithm, UnsupportedOperationError, NONCE_LEN,
 };
 use rustls::crypto::tls13::HkdfUsingHmac;
 use rustls::crypto::CipherSuite;
@@ -144,10 +143,11 @@ impl MessageDecrypter for Sm4GcmDecrypter {
         let aad = make_tls13_aad(payload.len());
 
         let ct_len = payload.len() - 16;
-        let tag: [u8; 16] = payload[ct_len..].try_into().map_err(|_| Error::DecryptError)?;
-        let plaintext =
-            sm4_decrypt_gcm(&self.key, &nonce, &aad, &payload[..ct_len], &tag)
-                .map_err(|_| Error::DecryptError)?;
+        let tag: [u8; 16] = payload[ct_len..]
+            .try_into()
+            .map_err(|_| Error::DecryptError)?;
+        let plaintext = sm4_decrypt_gcm(&self.key, &nonce, &aad, &payload[..ct_len], &tag)
+            .map_err(|_| Error::DecryptError)?;
 
         // 将明文写回 payload（in-place），然后截断
         let plain_len = plaintext.len();

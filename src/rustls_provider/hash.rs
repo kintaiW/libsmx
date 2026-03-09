@@ -49,3 +49,59 @@ impl crypto::hash::Context for Sm3Context {
         self.0.update(data);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rustls::crypto::hash::Hash;
+
+    use super::SM3;
+
+    // GB/T 32905 标准向量："abc" → SM3 哈希
+    const ABC_DIGEST: &[u8] = &[
+        0x66, 0xc7, 0xf0, 0xf4, 0x62, 0xee, 0xed, 0xd9, 0xd1, 0xf2, 0xd4, 0x6b, 0xdc, 0x10, 0xe4,
+        0xe2, 0x41, 0x67, 0xc4, 0x87, 0x5c, 0xf2, 0xf7, 0xa2, 0x29, 0x7d, 0xa0, 0x2b, 0x8f, 0x4b,
+        0xa8, 0xe0,
+    ];
+
+    #[test]
+    fn test_hash_abc() {
+        let out = SM3.hash(b"abc");
+        assert_eq!(out.as_ref(), ABC_DIGEST);
+    }
+
+    #[test]
+    fn test_context_update_finish() {
+        let mut ctx = SM3.start();
+        ctx.update(b"ab");
+        ctx.update(b"c");
+        let out = ctx.finish();
+        assert_eq!(out.as_ref(), ABC_DIGEST);
+    }
+
+    #[test]
+    fn test_context_fork_finish() {
+        let mut ctx = SM3.start();
+        ctx.update(b"abc");
+        // fork_finish 不消耗 ctx，fork 后原 ctx 可继续 finish
+        let out1 = ctx.fork_finish();
+        let out2 = ctx.finish();
+        assert_eq!(out1.as_ref(), ABC_DIGEST);
+        assert_eq!(out2.as_ref(), ABC_DIGEST);
+    }
+
+    #[test]
+    fn test_context_fork() {
+        let mut ctx = SM3.start();
+        ctx.update(b"abc");
+        let forked = ctx.fork();
+        let out1 = forked.finish();
+        let out2 = ctx.finish();
+        assert_eq!(out1.as_ref(), ABC_DIGEST);
+        assert_eq!(out2.as_ref(), ABC_DIGEST);
+    }
+
+    #[test]
+    fn test_output_len() {
+        assert_eq!(SM3.output_len(), 32);
+    }
+}

@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SM4 AEAD combined format**
   - `sm4_encrypt_gcm_combined` / `sm4_decrypt_gcm_combined`: TLS format (ciphertext||tag)
   - `sm4_encrypt_ccm_combined` / `sm4_decrypt_ccm_combined`: Same format for CCM
+
+## [0.2.0] - 2025-03-08
+
+### Added
+
 - **BLS signatures** (`bls` module, requires `alloc` feature)
   - `bls_keygen` / `bls_sign` / `bls_verify`: minimal-signature-size variant (sig ∈ G1, pk ∈ G2)
   - `bls_aggregate` / `bls_aggregate_verify`: multi-message aggregate signatures
@@ -92,9 +97,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - MSRV raised to 1.83.0 (required by crypto-bigint 0.6.x for ConstMontyForm constant-time Montgomery arithmetic)
 - Use Rust 1.83+ built-in `div_ceil` method instead of manual implementation
-
-### CI
-
 - Optimized sanity_check.sh to skip test code, avoiding false positives
 
 ## [0.1.0] - 2025-03-07

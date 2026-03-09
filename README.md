@@ -7,7 +7,9 @@
 [![License](https://img.shields.io/crates/l/libsmx.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.83.0-blue.svg)](https://blog.rust-lang.org/2024/11/28/Rust-1.83.0.html)
 
-Pure-Rust, `#![no_std]` implementation of Chinese commercial cryptography standards with constant-time operations throughout.
+Pure-Rust, `#![no_std]` implementation of Chinese commercial cryptography standards (国密/GuoMi) with constant-time operations throughout. Designed for embedded systems, WASM, and production use.
+
+> **Security Notice**: This library has **not** been independently audited. While all secret-dependent operations are constant-time and `#![forbid(unsafe_code)]` is enforced, you should evaluate the risks before using it in production. Report vulnerabilities via [SECURITY.md](SECURITY.md) or email [kintai@foxmail.com](mailto:kintai@foxmail.com).
 
 | Algorithm | Standard | Description |
 |-----------|----------|-------------|
@@ -151,12 +153,20 @@ sm9_verify(msg, &h, &s, user_id, &sign_pub).unwrap();
 |---------|---------|-------------|
 | `alloc` | Yes | Enables `Vec`-returning APIs (SM2/SM9 encrypt/decrypt, SM4 modes) |
 | `std` | No | Enables `std::error::Error` impl and re-exports `rand_core/std` |
+| `rustls-provider` | No | Enables rustls `CryptoProvider` with RFC 8998 ShangMi TLS 1.3 cipher suites |
 
 For `no_std` without `alloc`:
 
 ```toml
 [dependencies]
 libsmx = { version = "0.3", default-features = false }
+```
+
+With rustls TLS 1.3 provider:
+
+```toml
+[dependencies]
+libsmx = { version = "0.3", features = ["rustls-provider"] }
 ```
 
 ## Benchmarks
@@ -210,6 +220,12 @@ cargo bench
 - GCM/CCM authentication tags are verified in constant time
 
 > **Disclaimer**: This library has **not** been independently audited. See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome on [GitHub](https://github.com/kintaiW/libsmx).
+
+For **security vulnerabilities**, please do **not** open public issues. Instead, email [kintai@foxmail.com](mailto:kintai@foxmail.com) directly. See [SECURITY.md](SECURITY.md) for details.
 
 ## MSRV Policy
 
