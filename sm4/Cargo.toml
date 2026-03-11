@@ -1,0 +1,22 @@
+[package]
+name = "sm4"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.83.0"
+license = "Apache-2.0"
+description = "SM4 (ShangMi 4) block cipher with constant-time bitslice S-box — GB/T 32907-2016"
+repository = "https://github.com/kintaiW/libsmx"
+categories = ["cryptography", "no-std::no-alloc"]
+keywords = ["crypto", "cipher", "sm4", "shangmi", "block-cipher"]
+
+[dependencies]
+cipher  = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+hex-literal = { workspace = true }
+cipher      = { workspace = true, features = ["dev"] }
+
+[features]
+default = []
+zeroize = []

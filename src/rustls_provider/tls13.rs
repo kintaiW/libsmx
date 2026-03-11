@@ -14,7 +14,7 @@ use rustls::error::Error;
 use rustls::version::TLS13_VERSION;
 use rustls::{CipherSuiteCommon, ConnectionTrafficSecrets, Tls13CipherSuite};
 
-use crate::sm4::{sm4_decrypt_ccm, sm4_decrypt_gcm, sm4_encrypt_ccm, sm4_encrypt_gcm};
+use super::aead::{sm4_decrypt_ccm, sm4_decrypt_gcm, sm4_encrypt_ccm, sm4_encrypt_gcm};
 
 // ── HKDF（零代码复用 rustls 内置 HkdfUsingHmac）──────────────────────────────
 

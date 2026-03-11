@@ -88,13 +88,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       # Reason: 在所有平台上显式设置 bash 以统一 Windows/Linux/macOS 行为
-      - name: 运行测试（默认 features = alloc）
-        run: cargo test --all-targets
+      - name: 运行测试（默认 features，全 workspace）
+        run: cargo test --workspace --all-targets
         shell: bash
 
       - name: 运行测试（no_std，无 alloc）
         # Reason: 验证嵌入式 / WASM / 裸机兼容性
-        run: cargo test --no-default-features --lib
+        run: cargo test --workspace --no-default-features --lib
         shell: bash
 
       - name: 运行文档测试
@@ -128,13 +128,114 @@ jobs:
 
       # Reason: MSRV 只验证能编译，不运行测试（避免 dev-dependencies 兼容问题）
       - name: 检查编译（默认 features）
-        run: cargo check
+        run: cargo check --workspace
 
       - name: 检查编译（no_std）
-        run: cargo check --no-default-features
+        run: cargo check --workspace --no-default-features
 
   # =============================================================================
-  # Job 4: 测试覆盖率（仅 Linux，上传 Codecov）
+  # Job 4: no_std 跨目标编译验证
+  # =============================================================================
+  no-std:
+    name: no_std (${{ matrix.target }})
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - thumbv7em-none-eabi    # ARM Cortex-M4，典型嵌入式目标
+          - wasm32-unknown-unknown # WebAssembly
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链（stable + 目标平台）
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      # Reason: --no-default-features 禁用 alloc，验证裸机 no_std 兼容性
+      - name: 检查 sm3（no_std，无 alloc）
+        run: cargo check -p sm3 --target ${{ matrix.target }} --no-default-features
+
+      - name: 检查 sm4（no_std，无 alloc）
+        run: cargo check -p sm4 --target ${{ matrix.target }} --no-default-features
+
+      - name: 检查 sm2（no_std，无 alloc）
+        run: cargo check -p sm2 --target ${{ matrix.target }} --no-default-features
+
+  # =============================================================================
+  # Job 5: Feature Powerset（验证所有 feature 组合均可编译）
+  # =============================================================================
+  feature-powerset:
+    name: Feature Powerset
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链（stable）
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      - name: 安装 cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
+      # Reason: 验证所有 feature 组合均能编译，防止 feature 互斥或遗漏依赖
+      - name: 检查 sm3 feature powerset
+        run: cargo hack check -p sm3 --feature-powerset --no-dev-deps
+
+      - name: 检查 sm4 feature powerset
+        run: cargo hack check -p sm4 --feature-powerset --no-dev-deps
+
+      - name: 检查 sm2 feature powerset
+        run: cargo hack check -p sm2 --feature-powerset --no-dev-deps
+
+  # =============================================================================
+  # Job 6: Miri 内存安全验证
+  # =============================================================================
+  miri:
+    name: Miri
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust nightly + Miri 组件
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+
+      - name: 缓存 Cargo 编译产物
+        uses: Swatinem/rust-cache@v2
+
+      # Reason: 只对纯算法 crate（sm3/sm4/sm2）运行 Miri，
+      # 避免对系统调用密集的代码产生误报。
+      # -Zmiri-strict-provenance 开启严格指针来源检查。
+      - name: Miri 检查 sm3
+        run: cargo miri test -p sm3
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+
+      - name: Miri 检查 sm4
+        run: cargo miri test -p sm4
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+
+      - name: Miri 检查 sm2（仅单元测试，跳过 alloc 密集测试）
+        run: cargo miri test -p sm2 --lib
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+
+  # =============================================================================
+  # Job 7: 测试覆盖率（仅 Linux，上传 Codecov）
   # =============================================================================
   coverage:
     name: Coverage
@@ -165,7 +266,7 @@ jobs:
         # Reason: fail_ci_if_error=false 避免 Codecov 暂时不可用时阻断 CI
 
   # =============================================================================
-  # Job 5: 性能回归检测（仅 PR 触发）
+  # Job 8: 性能回归检测（仅 PR 触发）
   # =============================================================================
   benchmark:
     name: Benchmark

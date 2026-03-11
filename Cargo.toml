@@ -1,3 +1,22 @@
+# ── Workspace 配置 ──────────────────────────────────────────────────────────
+[workspace]
+resolver = "2"
+members = [
+    ".",      # libsmx (现有单体 crate，保持向后兼容)
+    "sm2",    # SM2 独立 crate（实现 signature::Signer/Verifier）
+    "sm3",    # SM3 独立 crate（实现 digest::Digest）
+    "sm4",    # SM4 独立 crate（实现 cipher::BlockCipher）
+]
+
+[workspace.dependencies]
+digest    = { version = "0.11.1", default-features = false }
+cipher    = { version = "0.5.1",  default-features = false }
+subtle    = { version = "2.6",    default-features = false }
+zeroize   = { version = "1.8",    default-features = false, features = ["derive"] }
+signature = { version = "2.2",    default-features = false }
+hex-literal = "0.4"
+
+# ── libsmx Package 配置（保留现有不变）────────────────────────────────────
 [package]
 name = "libsmx"
 version = "0.3.0"
@@ -52,6 +71,7 @@ hex       = "0.4"
 criterion = { version = "0.5", features = ["html_reports"] }
 rand      = "0.8"
 sm9_core = "0.5.0"
+proptest  = { version = "1", default-features = false, features = ["alloc"] }
 # rustls-provider 集成测试依赖（通过 feature 条件编译保护）
 rustls    = { git = "https://github.com/rustls/rustls.git", branch = "main", default-features = false, features = ["log", "webpki"] }
 pki-types = { package = "rustls-pki-types", version = "1", features = ["alloc"] }

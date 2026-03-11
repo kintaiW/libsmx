@@ -1,0 +1,37 @@
+[package]
+name = "libsmx-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Reason: 空 [workspace] 使 fuzz crate 独立于根 workspace，
+# 这是 cargo-fuzz 的标准做法（需要 nightly 且不应影响 stable CI）。
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+libsmx = { path = ".." }
+sm2 = { path = "../sm2" }
+sm3 = { path = "../sm3" }
+sm4 = { path = "../sm4" }
+
+[[bin]]
+name = "fuzz_sm3_digest"
+path = "fuzz_targets/fuzz_sm3_digest.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_sm4_roundtrip"
+path = "fuzz_targets/fuzz_sm4_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_sm2_verify"
+path = "fuzz_targets/fuzz_sm2_verify.rs"
+test = false
+doc = false

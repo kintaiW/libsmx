@@ -1,0 +1,35 @@
+[package]
+name = "sm2"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.83.0"
+license = "Apache-2.0"
+description = "SM2 (ShangMi 2) elliptic curve cryptography — signature, encryption, key exchange (GB/T 32918-2016). Pure-Rust, no_std."
+repository = "https://github.com/kintaiW/libsmx"
+documentation = "https://docs.rs/sm2"
+readme = "README.md"
+categories = ["cryptography", "no-std"]
+keywords = ["crypto", "ecc", "sm2", "shangmi", "signature"]
+
+[dependencies]
+# SM3 is used by SM2 for Z-value and message digest computation
+sm3             = { path = "../sm3" }
+# digest::Digest + Update traits (re-exported by sm3, but listed explicitly for clarity)
+digest          = { workspace = true }
+crypto-bigint   = { version = "0.6", default-features = false }
+subtle          = { workspace = true }
+zeroize         = { workspace = true }
+rand_core       = { version = "0.6", default-features = false, features = ["getrandom"] }
+# signature trait integration
+signature       = { workspace = true }
+
+[dev-dependencies]
+hex-literal = { workspace = true }
+rand        = { version = "0.8", default-features = false, features = ["std_rng"] }
+
+[features]
+default = ["alloc"]
+# alloc: required for encrypt/decrypt (Vec-based ciphertext) and DER encoding
+alloc = []
+# hazmat: exposes sign_with_k (dangerous raw-k API, for testing only)
+hazmat = []

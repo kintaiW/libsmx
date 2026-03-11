@@ -425,7 +425,8 @@ impl Sm4Key {
         store_block(block, &x);
     }
 
-    /// 获取轮密钥引用（仅供 modes 子模块使用）
+    /// 获取轮密钥引用（仅供 rustls_provider::aead 使用）
+    #[cfg(feature = "rustls-provider")]
     pub(crate) fn round_keys(&self) -> &[u32; 32] {
         &self.rk
     }
@@ -496,7 +497,8 @@ fn decrypt_rounds(x: &mut [u32; 4], rk: &[u32; 32]) {
     x.reverse();
 }
 
-/// 辅助：加密独立块（不缓存轮密钥，供 modes 一次性使用）
+/// 辅助：加密独立块（供 rustls_provider::aead 使用）
+#[cfg(feature = "rustls-provider")]
 pub(crate) fn encrypt_block_raw(rk: &[u32; 32], block: &[u8; 16]) -> [u8; 16] {
     let mut x = load_block(block);
     encrypt_rounds(&mut x, rk);

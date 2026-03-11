@@ -39,13 +39,13 @@ pub const DIGEST_LEN: usize = 32;
 #[derive(Clone)]
 pub struct Sm3Hasher {
     /// 当前状态（8 × u32）
-    state: [u32; 8],
+    pub(super) state: [u32; 8],
     /// 未处理的字节缓冲区（最多 64 字节）
-    buffer: [u8; 64],
+    pub(super) buffer: [u8; 64],
     /// 缓冲区已填充字节数
-    buf_len: usize,
+    pub(super) buf_len: usize,
     /// 已处理的总位数（用于最终填充）
-    bit_len: u64,
+    pub(super) bit_len: u64,
 }
 
 impl Sm3Hasher {
@@ -285,7 +285,12 @@ impl HmacSm3 {
 impl zeroize::Zeroize for HmacSm3 {
     fn zeroize(&mut self) {
         self.opad_key.zeroize();
-        // inner 的 Sm3Hasher 不含密钥材料，无需特殊清零
+        // Reason: inner 在 new() 中已处理含密钥的 ipad 前缀，
+        // 其 state/buffer 字段间接含密钥材料，必须一并清零。
+        self.inner.state.zeroize();
+        self.inner.buffer.zeroize();
+        self.inner.buf_len = 0;
+        self.inner.bit_len = 0;
     }
 }
 

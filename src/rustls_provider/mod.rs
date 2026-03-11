@@ -18,6 +18,7 @@ pub mod hmac;
 pub mod kx;
 pub mod sign;
 pub mod tls13;
+pub(crate) mod aead;
 pub mod verify;
 
 /// 构造国密 `CryptoProvider`
