@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 变更
+
+- 将 `crypto-bigint` 从 0.6 升级到 0.7（RUSTSEC-2026-0387）；受 `crypto-bigint 0.7` 限制，MSRV 提升至 **1.87.0**
+- `rustls-provider`：固定 rustls git 版本并迁移到新版记录层 API；集成测试改用外部缓冲连接 API
+- 锁文件更新：`crossbeam-epoch` 0.9.20、`rand` 0.8.6 / 0.9.3、`spin` 0.9.9；仅 dev 依赖的 `paste` 1.0.15 保留（RUSTSEC-2024-0436，无修复版本）
+- 依赖版本下限提升到已修复版本：`rand_core` >= 0.6.2（RUSTSEC-2021-0023，见 issue #2）、`rand` >= 0.8.6
+
 ## [0.3.0] - 2025-03-09
 
 ### 新增

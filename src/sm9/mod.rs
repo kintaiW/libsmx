@@ -17,7 +17,7 @@ pub mod utils;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
-use crypto_bigint::{Zero, U256};
+use crypto_bigint::U256;
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 use zeroize::{Zeroize, ZeroizeOnDrop};

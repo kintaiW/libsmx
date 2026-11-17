@@ -3,19 +3,19 @@
 //! 曲线参数来自 GB/T 38635.1-2020 附录 A。
 //! 使用 `crypto-bigint::ConstMontyForm` 实现常量时间 Montgomery 算术。
 
-use crypto_bigint::{impl_modulus, modular::ConstMontyForm, U256};
+use crypto_bigint::{const_monty_params, modular::ConstMontyForm, U256};
 
 // ── 模数定义 ──────────────────────────────────────────────────────────────────
 
 // SM9 BN256 素数域模数 p
-impl_modulus!(
+const_monty_params!(
     Sm9FieldModulus,
     U256,
     "B640000002A3A6F1D603AB4FF58EC74521F2934B1A7AEEDBE56F9B27E351457D"
 );
 
 // SM9 BN256 群阶 n
-impl_modulus!(
+const_monty_params!(
     Sm9GroupOrder,
     U256,
     "B640000002A3A6F1D603AB4FF58EC74449F2934B18EA8BEEE56EE19CD69ECF25"
@@ -62,7 +62,7 @@ pub fn fp_from_bytes(bytes: &[u8; 32]) -> Fp {
 /// 将 Fp 元素转为大端字节
 #[inline]
 pub fn fp_to_bytes(a: &Fp) -> [u8; 32] {
-    a.retrieve().to_be_bytes()
+    a.retrieve().to_be_bytes().into()
 }
 
 /// 从大端字节构造 Fn（调用方保证值 < n）
@@ -74,7 +74,7 @@ pub fn fn_from_bytes(bytes: &[u8; 32]) -> Fn {
 /// 将 Fn 元素转为大端字节
 #[inline]
 pub fn fn_to_bytes(a: &Fn) -> [u8; 32] {
-    a.retrieve().to_be_bytes()
+    a.retrieve().to_be_bytes().into()
 }
 
 /// Fp 加法（模 p）
@@ -105,7 +105,7 @@ pub fn fp_square(a: &Fp) -> Fp {
 
 /// Fp 求逆（Bernstein-Yang，常量时间）
 pub fn fp_inv(a: &Fp) -> Option<Fp> {
-    let inv = a.inv();
+    let inv = a.invert();
     if bool::from(inv.is_some()) {
         Some(inv.unwrap())
     } else {
@@ -136,7 +136,7 @@ pub fn fn_neg(a: &Fn) -> Fn {
 
 /// Fn 求逆（Bernstein-Yang，常量时间）
 pub fn fn_inv(a: &Fn) -> Option<Fn> {
-    let inv = a.inv();
+    let inv = a.invert();
     if bool::from(inv.is_some()) {
         Some(inv.unwrap())
     } else {

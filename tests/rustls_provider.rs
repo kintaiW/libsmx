@@ -2,26 +2,33 @@
 //!
 //! 使用 Raw Public Key（RFC 7250）模式，无需 X.509 证书，
 //! 直接用 SM2 密钥对作为身份凭证完成 TLS 1.3 握手自回环测试。
+//!
+//! Reason: rustls 0.24 main 把连接改成外部缓冲（`Connection<Side, Tcp>`），
+//!   旧的 `read_tls/write_tls/process_new_packets` 已移除，故测试驱动一并改写到新接口。
 
 #![cfg(feature = "rustls-provider")]
 
-use std::io::{Read, Write};
 use std::sync::Arc;
 
 use pki_types::{PrivateSec1KeyDer, ServerName, SubjectPublicKeyInfoDer};
 use rustls::client::danger::{
-    HandshakeSignatureValid, PeerVerified, ServerIdentity, ServerVerifier,
+    HandshakeSignatureValid, ServerIdentity, ServerVerifier, SignatureVerificationInput,
 };
-use rustls::crypto::{CipherSuite, CryptoProvider, SignatureScheme};
+use rustls::client::ClientHandshake;
+use rustls::crypto::{CipherSuite, CryptoProvider, SignatureScheme, VerifiedIdentity};
 use rustls::enums::CertificateType;
-use rustls::server::danger::SignatureVerificationInput;
-use rustls::{ClientConfig, ClientConnection, Connection, ServerConfig, ServerConnection};
+use rustls::{
+    ClientConfig, ClientSide, Connection, ServerConfig, ServerSide, SliceInput, Tcp,
+};
 
 use libsmx::rustls_provider;
 use libsmx::sm2::{
     der::{public_key_to_spki_der, sig_from_der},
     generate_keypair, verify_message, DEFAULT_ID,
 };
+
+type ClientConn = Connection<ClientSide, Tcp>;
+type ServerConn = Connection<ServerSide, Tcp>;
 
 // ── 测试用 RNG ────────────────────────────────────────────────────────────────
 
@@ -69,32 +76,96 @@ fn make_sm2_keypair() -> (Vec<u8>, Vec<u8>) {
     (sec1, spki)
 }
 
-/// 在内存中传输 TLS 记录（left → right）
-fn transfer(left: &mut impl Connection, right: &mut impl Connection) -> usize {
-    let mut buf = [0u8; 65536];
-    let mut total = 0;
-    while left.wants_write() {
-        let n = left.write_tls(&mut &mut buf[..]).unwrap();
-        if n == 0 {
-            break;
-        }
-        total += n;
-        let mut offs = 0;
-        while offs < n {
-            offs += right.read_tls(&mut &buf[offs..n]).unwrap();
-        }
+/// 把 client → server 方向的缓冲喂给服务端，完成握手消息或收下应用数据
+fn server_read(
+    server: &mut ServerConn,
+    input: &mut Vec<u8>,
+    output: &mut Vec<u8>,
+    received: &mut Vec<u8>,
+) {
+    if input.is_empty() {
+        return;
     }
-    total
+    let mut slice = SliceInput::new(input);
+    server
+        .read_tls(&mut slice, output)
+        .handle_all(received)
+        .unwrap();
+    let used = slice.into_used();
+    input.drain(..used);
 }
 
-/// 驱动完整 TLS 握手
-fn do_handshake(client: &mut ClientConnection, server: &mut ServerConnection) {
-    while client.is_handshaking() || server.is_handshaking() {
-        transfer(client, server);
-        server.process_new_packets().unwrap();
-        transfer(server, client);
-        client.process_new_packets().unwrap();
+/// 让客户端状态机消费 server → client 方向的缓冲，必要时调用配置好的 verifier
+fn client_process(
+    state: ClientHandshake,
+    input: &mut Vec<u8>,
+    output: &mut Vec<u8>,
+) -> ClientHandshake {
+    let mut slice = SliceInput::new(input);
+    let next = match state {
+        ClientHandshake::NeedsInput(needs_input) => needs_input.process(&mut slice, output),
+        ClientHandshake::VerifyServerIdentity(verify) => verify.with_config(output),
+        other => return other,
     }
+    .unwrap();
+    let used = slice.into_used();
+    input.drain(..used);
+    next
+}
+
+/// 驱动完整 TLS 握手，返回完成后的客户端连接
+fn do_handshake(
+    mut client: ClientHandshake,
+    server: &mut ServerConn,
+    c2s: &mut Vec<u8>,
+    s2c: &mut Vec<u8>,
+) -> ClientConn {
+    loop {
+        server_read(server, c2s, s2c, &mut Vec::new());
+        if let ClientHandshake::Complete(conn) = client {
+            // Reason: 客户端完成后还要把 Finished 交给服务端，握手才算双向闭合。
+            assert!(!server.is_handshaking());
+            return conn;
+        }
+        assert!(!s2c.is_empty(), "handshake stalled");
+        client = client_process(client, s2c, c2s);
+    }
+}
+
+/// client → server 方向投喂应用数据，并把明文收进 `received`
+fn deliver_to_server(
+    client: &mut ClientConn,
+    server: &mut ServerConn,
+    msg: &[u8],
+    c2s: &mut Vec<u8>,
+    s2c: &mut Vec<u8>,
+) -> Vec<u8> {
+    client.write(msg.into(), c2s).unwrap();
+    let mut received = Vec::new();
+    server_read(server, c2s, s2c, &mut received);
+    received
+}
+
+/// server → client 方向投喂应用数据，并把明文收进 `received`
+fn deliver_to_client(
+    server: &mut ServerConn,
+    client: &mut ClientConn,
+    msg: &[u8],
+    c2s: &mut Vec<u8>,
+    s2c: &mut Vec<u8>,
+) -> Vec<u8> {
+    server.write(msg.into(), s2c).unwrap();
+    let mut received = Vec::new();
+    {
+        let mut slice = SliceInput::new(s2c);
+        client
+            .read_tls(&mut slice, c2s)
+            .handle_all(&mut received)
+            .unwrap();
+        let used = slice.into_used();
+        s2c.drain(..used);
+    }
+    received
 }
 
 // ── 自定义 ServerVerifier（测试用，接受任意 SM2 Raw Public Key）──────────────
@@ -109,12 +180,13 @@ impl AcceptAllSm2ServerVerifier {
 }
 
 impl ServerVerifier for AcceptAllSm2ServerVerifier {
-    fn verify_identity(
+    fn verify_identity<'a>(
         &self,
-        _identity: &ServerIdentity<'_>,
-    ) -> Result<PeerVerified, rustls::Error> {
-        // Reason: 测试中不验证服务端身份（Raw Public Key 模式，无 CA 信任链）
-        Ok(PeerVerified::assertion())
+        identity: &ServerIdentity<'a, '_>,
+    ) -> Result<VerifiedIdentity<'a>, rustls::Error> {
+        // Reason: 测试中不验证服务端身份（Raw Public Key 模式，无 CA 信任链），
+        //   直接把呈现的身份标记为已验证。
+        Ok(VerifiedIdentity::assertion(identity.identity.clone()))
     }
 
     fn verify_tls12_signature(
@@ -192,14 +264,14 @@ fn make_configs(
     //   rustls-webpki 支持，但我们的 SignatureVerificationAlgorithm 实现是正确的
     let creds = rustls::crypto::Credentials::new_unchecked(identity, server_signing_key);
     let cert_resolver = Arc::new(rustls::crypto::SingleCredential::from(creds));
-    let server_config = ServerConfig::builder(provider.clone().into())
+    let server_config = ServerConfig::builder(Arc::new(provider.clone()))
         .with_no_client_auth()
         .with_server_credential_resolver(cert_resolver)
         .unwrap();
 
     // 客户端：自定义 verifier 跳过证书链校验
     let verifier = Arc::new(AcceptAllSm2ServerVerifier::new());
-    let client_config = ClientConfig::builder(provider.clone().into())
+    let client_config = ClientConfig::builder(Arc::new(provider.clone()))
         .dangerous()
         .with_custom_certificate_verifier(verifier)
         .with_no_client_auth()
@@ -218,11 +290,16 @@ fn test_tls13_sm4_gcm_sm3_handshake() {
     let (server_config, client_config) = make_configs(&provider, server_sec1, server_spki);
 
     let server_name = ServerName::try_from("localhost").unwrap();
-    let client_arc = Arc::new(client_config);
-    let mut client = client_arc.connect(server_name).build().unwrap();
-    let mut server = ServerConnection::new(Arc::new(server_config)).unwrap();
-
-    do_handshake(&mut client, &mut server);
+    let mut c2s = Vec::new();
+    let mut s2c = Vec::new();
+    let client = ClientHandshake::NeedsInput(
+        Arc::new(client_config)
+            .connect(server_name)
+            .start_handshake(&mut c2s)
+            .unwrap(),
+    );
+    let mut server: ServerConn = Connection::new(Arc::new(server_config)).unwrap();
+    let mut client = do_handshake(client, &mut server, &mut c2s, &mut s2c);
 
     assert_eq!(
         client.negotiated_cipher_suite().unwrap().suite(),
@@ -231,11 +308,7 @@ fn test_tls13_sm4_gcm_sm3_handshake() {
 
     // server → client 数据传输
     let plaintext = b"Hello, SM2/SM4/SM3!";
-    server.writer().write_all(plaintext).unwrap();
-    transfer(&mut server, &mut client);
-    client.process_new_packets().unwrap();
-    let mut received = vec![0u8; plaintext.len()];
-    client.reader().read_exact(&mut received).unwrap();
+    let received = deliver_to_client(&mut server, &mut client, plaintext, &mut c2s, &mut s2c);
     assert_eq!(received, plaintext.to_vec());
 }
 
@@ -256,11 +329,16 @@ fn test_tls13_sm4_ccm_sm3_handshake() {
     let (server_config, client_config) = make_configs(&provider, server_sec1, server_spki);
 
     let server_name = ServerName::try_from("localhost").unwrap();
-    let client_arc = Arc::new(client_config);
-    let mut client = client_arc.connect(server_name).build().unwrap();
-    let mut server = ServerConnection::new(Arc::new(server_config)).unwrap();
-
-    do_handshake(&mut client, &mut server);
+    let mut c2s = Vec::new();
+    let mut s2c = Vec::new();
+    let client = ClientHandshake::NeedsInput(
+        Arc::new(client_config)
+            .connect(server_name)
+            .start_handshake(&mut c2s)
+            .unwrap(),
+    );
+    let mut server: ServerConn = Connection::new(Arc::new(server_config)).unwrap();
+    let mut client = do_handshake(client, &mut server, &mut c2s, &mut s2c);
 
     assert_eq!(
         client.negotiated_cipher_suite().unwrap().suite(),
@@ -269,12 +347,8 @@ fn test_tls13_sm4_ccm_sm3_handshake() {
 
     // client → server 数据传输
     let msg = b"SM4-CCM test";
-    client.writer().write_all(msg).unwrap();
-    transfer(&mut client, &mut server);
-    server.process_new_packets().unwrap();
-    let mut buf = vec![0u8; msg.len()];
-    server.reader().read_exact(&mut buf).unwrap();
-    assert_eq!(buf, msg.to_vec());
+    let received = deliver_to_server(&mut client, &mut server, msg, &mut c2s, &mut s2c);
+    assert_eq!(received, msg.to_vec());
 }
 
 /// 验证握手后密钥交换组为 curveSM2
@@ -285,11 +359,16 @@ fn test_kx_group_is_curve_sm2() {
     let (server_config, client_config) = make_configs(&provider, server_sec1, server_spki);
 
     let server_name = ServerName::try_from("localhost").unwrap();
-    let client_arc = Arc::new(client_config);
-    let mut client = client_arc.connect(server_name).build().unwrap();
-    let mut server = ServerConnection::new(Arc::new(server_config)).unwrap();
-
-    do_handshake(&mut client, &mut server);
+    let mut c2s = Vec::new();
+    let mut s2c = Vec::new();
+    let client = ClientHandshake::NeedsInput(
+        Arc::new(client_config)
+            .connect(server_name)
+            .start_handshake(&mut c2s)
+            .unwrap(),
+    );
+    let mut server: ServerConn = Connection::new(Arc::new(server_config)).unwrap();
+    let client = do_handshake(client, &mut server, &mut c2s, &mut s2c);
 
     assert_eq!(
         client
@@ -307,27 +386,24 @@ fn test_bidirectional_data_transfer() {
     let (server_config, client_config) = make_configs(&provider, server_sec1, server_spki);
 
     let server_name = ServerName::try_from("localhost").unwrap();
-    let client_arc = Arc::new(client_config);
-    let mut client = client_arc.connect(server_name).build().unwrap();
-    let mut server = ServerConnection::new(Arc::new(server_config)).unwrap();
-
-    do_handshake(&mut client, &mut server);
+    let mut c2s = Vec::new();
+    let mut s2c = Vec::new();
+    let client = ClientHandshake::NeedsInput(
+        Arc::new(client_config)
+            .connect(server_name)
+            .start_handshake(&mut c2s)
+            .unwrap(),
+    );
+    let mut server: ServerConn = Connection::new(Arc::new(server_config)).unwrap();
+    let mut client = do_handshake(client, &mut server, &mut c2s, &mut s2c);
 
     // client → server
-    let c2s = b"from client";
-    client.writer().write_all(c2s).unwrap();
-    transfer(&mut client, &mut server);
-    server.process_new_packets().unwrap();
-    let mut buf = vec![0u8; c2s.len()];
-    server.reader().read_exact(&mut buf).unwrap();
-    assert_eq!(buf, c2s.to_vec());
+    let c2s_msg = b"from client";
+    let received = deliver_to_server(&mut client, &mut server, c2s_msg, &mut c2s, &mut s2c);
+    assert_eq!(received, c2s_msg.to_vec());
 
     // server → client
-    let s2c = b"from server";
-    server.writer().write_all(s2c).unwrap();
-    transfer(&mut server, &mut client);
-    client.process_new_packets().unwrap();
-    let mut buf2 = vec![0u8; s2c.len()];
-    client.reader().read_exact(&mut buf2).unwrap();
-    assert_eq!(buf2, s2c.to_vec());
+    let s2c_msg = b"from server";
+    let received = deliver_to_client(&mut server, &mut client, s2c_msg, &mut c2s, &mut s2c);
+    assert_eq!(received, s2c_msg.to_vec());
 }

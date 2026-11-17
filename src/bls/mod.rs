@@ -14,7 +14,7 @@
 pub mod hash_to_curve;
 pub mod threshold;
 
-use crypto_bigint::{Zero, U256};
+use crypto_bigint::U256;
 use rand_core::RngCore;
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};

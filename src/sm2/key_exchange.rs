@@ -7,7 +7,7 @@
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
-use crypto_bigint::{Zero, U256};
+use crypto_bigint::U256;
 use rand_core::RngCore;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -74,7 +74,7 @@ impl EphemeralKey {
         let r_jac = JacobianPoint::scalar_mul_g(r);
         let r_aff = r_jac.to_affine().map_err(|_| Error::InvalidPrivateKey)?;
         Ok(EphemeralKey {
-            r_bytes: r.to_be_bytes(),
+            r_bytes: r.to_be_bytes().into(),
             r_point: r_aff.to_bytes(),
         })
     }

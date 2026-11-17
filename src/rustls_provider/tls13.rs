@@ -4,12 +4,12 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use rustls::crypto::cipher::{
-    make_tls13_aad, AeadKey, EncodedMessage, InboundOpaque, Iv, MessageDecrypter, MessageEncrypter,
-    Nonce, OutboundOpaque, OutboundPlain, Tls13AeadAlgorithm, UnsupportedOperationError, NONCE_LEN,
+    encode_record_header, make_tls13_aad, AeadKey, InboundOpaque, Iv, Nonce, OutboundPlain, Record,
+    RecordDecrypter, RecordEncrypter, Tls13AeadAlgorithm, UnsupportedOperationError, NONCE_LEN,
 };
 use rustls::crypto::tls13::HkdfUsingHmac;
 use rustls::crypto::CipherSuite;
-use rustls::enums::{ContentType, ProtocolVersion};
+use rustls::enums::ContentType;
 use rustls::error::Error;
 use rustls::version::TLS13_VERSION;
 use rustls::{CipherSuiteCommon, ConnectionTrafficSecrets, Tls13CipherSuite};
@@ -53,14 +53,14 @@ pub static TLS13_SM4_CCM_SM3: &Tls13CipherSuite = &Tls13CipherSuite {
 struct Sm4GcmAead;
 
 impl Tls13AeadAlgorithm for Sm4GcmAead {
-    fn encrypter(&self, key: AeadKey, iv: Iv) -> Box<dyn MessageEncrypter> {
+    fn encrypter(&self, key: AeadKey, iv: Iv) -> Box<dyn RecordEncrypter> {
         Box::new(Sm4GcmEncrypter {
             key: aead_key_to_16(&key),
             iv,
         })
     }
 
-    fn decrypter(&self, key: AeadKey, iv: Iv) -> Box<dyn MessageDecrypter> {
+    fn decrypter(&self, key: AeadKey, iv: Iv) -> Box<dyn RecordDecrypter> {
         Box::new(Sm4GcmDecrypter {
             key: aead_key_to_16(&key),
             iv,
@@ -85,36 +85,31 @@ struct Sm4GcmEncrypter {
     iv: Iv,
 }
 
-impl MessageEncrypter for Sm4GcmEncrypter {
+impl RecordEncrypter for Sm4GcmEncrypter {
     fn encrypt(
         &mut self,
-        msg: EncodedMessage<OutboundPlain<'_>>,
+        record: Record<OutboundPlain<'_>>,
         seq: u64,
-    ) -> Result<EncodedMessage<OutboundOpaque>, Error> {
-        let total_len = self.encrypted_payload_len(msg.payload.len());
+        out: &mut Vec<u8>,
+    ) -> Result<(), Error> {
+        let total_len = self.encrypted_payload_len(record.payload.len());
+        let typ = ContentType::ApplicationData;
+        let header = encode_record_header(typ, record.version, total_len as u16);
+        out.reserve(header.len() + total_len);
+        out.extend_from_slice(&header);
+
         let nonce = Nonce::new(&self.iv, seq).to_array::<NONCE_LEN>()?;
-        let aad = make_tls13_aad(total_len);
+        let aad = make_tls13_aad(typ, record.version.encode(), total_len);
 
-        // 收集明文 + ContentType（TLS 1.3 inner plaintext 格式）
-        let mut plaintext: Vec<u8> = Vec::with_capacity(msg.payload.len() + 1);
-        {
-            let mut tmp = OutboundOpaque::with_capacity(msg.payload.len() + 1);
-            tmp.extend_from_chunks(&msg.payload);
-            tmp.extend_from_slice(&msg.typ.to_array());
-            plaintext.extend_from_slice(tmp.as_ref());
-        }
-
-        let (ciphertext, tag) = sm4_encrypt_gcm(&self.key, &nonce, &aad, &plaintext);
-
-        let mut out = OutboundOpaque::with_capacity(ciphertext.len() + 16);
+        // TLS 1.3 inner plaintext = payload || inner ContentType，然后整体加密。
+        let start = out.len();
+        record.payload.copy_to_vec(out);
+        out.extend_from_slice(&record.typ.to_array());
+        let (ciphertext, tag) = sm4_encrypt_gcm(&self.key, &nonce, &aad, &out[start..]);
+        out.truncate(start);
         out.extend_from_slice(&ciphertext);
         out.extend_from_slice(&tag);
-
-        Ok(EncodedMessage {
-            typ: ContentType::ApplicationData,
-            version: ProtocolVersion::TLSv1_2,
-            payload: out,
-        })
+        Ok(())
     }
 
     fn encrypted_payload_len(&self, payload_len: usize) -> usize {
@@ -127,33 +122,34 @@ struct Sm4GcmDecrypter {
     iv: Iv,
 }
 
-impl MessageDecrypter for Sm4GcmDecrypter {
+impl RecordDecrypter for Sm4GcmDecrypter {
     fn decrypt<'a>(
         &mut self,
-        mut msg: EncodedMessage<InboundOpaque<'a>>,
+        mut record: Record<InboundOpaque<'a>>,
         seq: u64,
-    ) -> Result<EncodedMessage<&'a [u8]>, Error> {
-        let payload = &mut msg.payload;
-        if payload.len() < 16 {
-            return Err(Error::DecryptError);
+    ) -> Result<Record<&'a [u8]>, Error> {
+        {
+            let payload = &mut record.payload;
+            if payload.len() < 16 {
+                return Err(Error::DecryptError);
+            }
+
+            let nonce = Nonce::new(&self.iv, seq).to_array::<NONCE_LEN>()?;
+            // Reason: AAD 使用解密前（含 tag）的完整 payload 长度
+            let aad = make_tls13_aad(record.typ, record.version.version(), payload.len());
+
+            let ct_len = payload.len() - 16;
+            let tag: [u8; 16] = payload[ct_len..]
+                .try_into()
+                .map_err(|_| Error::DecryptError)?;
+            let plaintext = sm4_decrypt_gcm(&self.key, &nonce, &aad, &payload[..ct_len], &tag)
+                .map_err(|_| Error::DecryptError)?;
+
+            let plain_len = plaintext.len();
+            payload[..plain_len].copy_from_slice(&plaintext);
+            payload.truncate(plain_len);
         }
-
-        let nonce = Nonce::new(&self.iv, seq).to_array::<NONCE_LEN>()?;
-        // Reason: AAD 使用解密前（含 tag）的完整 payload 长度
-        let aad = make_tls13_aad(payload.len());
-
-        let ct_len = payload.len() - 16;
-        let tag: [u8; 16] = payload[ct_len..]
-            .try_into()
-            .map_err(|_| Error::DecryptError)?;
-        let plaintext = sm4_decrypt_gcm(&self.key, &nonce, &aad, &payload[..ct_len], &tag)
-            .map_err(|_| Error::DecryptError)?;
-
-        // 将明文写回 payload（in-place），然后截断
-        let plain_len = plaintext.len();
-        payload[..plain_len].copy_from_slice(&plaintext);
-        payload.truncate(plain_len);
-        msg.into_tls13_unpadded_message()
+        record.into_tls13_unpadded_record()
     }
 }
 
@@ -162,14 +158,14 @@ impl MessageDecrypter for Sm4GcmDecrypter {
 struct Sm4CcmAead;
 
 impl Tls13AeadAlgorithm for Sm4CcmAead {
-    fn encrypter(&self, key: AeadKey, iv: Iv) -> Box<dyn MessageEncrypter> {
+    fn encrypter(&self, key: AeadKey, iv: Iv) -> Box<dyn RecordEncrypter> {
         Box::new(Sm4CcmEncrypter {
             key: aead_key_to_16(&key),
             iv,
         })
     }
 
-    fn decrypter(&self, key: AeadKey, iv: Iv) -> Box<dyn MessageDecrypter> {
+    fn decrypter(&self, key: AeadKey, iv: Iv) -> Box<dyn RecordDecrypter> {
         Box::new(Sm4CcmDecrypter {
             key: aead_key_to_16(&key),
             iv,
@@ -194,36 +190,31 @@ struct Sm4CcmEncrypter {
     iv: Iv,
 }
 
-impl MessageEncrypter for Sm4CcmEncrypter {
+impl RecordEncrypter for Sm4CcmEncrypter {
     fn encrypt(
         &mut self,
-        msg: EncodedMessage<OutboundPlain<'_>>,
+        record: Record<OutboundPlain<'_>>,
         seq: u64,
-    ) -> Result<EncodedMessage<OutboundOpaque>, Error> {
-        let total_len = self.encrypted_payload_len(msg.payload.len());
+        out: &mut Vec<u8>,
+    ) -> Result<(), Error> {
+        let total_len = self.encrypted_payload_len(record.payload.len());
+        let typ = ContentType::ApplicationData;
+        let header = encode_record_header(typ, record.version, total_len as u16);
+        out.reserve(header.len() + total_len);
+        out.extend_from_slice(&header);
+
         let nonce = Nonce::new(&self.iv, seq).to_array::<NONCE_LEN>()?;
-        let aad = make_tls13_aad(total_len);
+        let aad = make_tls13_aad(typ, record.version.encode(), total_len);
 
-        let mut plaintext: Vec<u8> = Vec::with_capacity(msg.payload.len() + 1);
-        {
-            let mut tmp = OutboundOpaque::with_capacity(msg.payload.len() + 1);
-            tmp.extend_from_chunks(&msg.payload);
-            tmp.extend_from_slice(&msg.typ.to_array());
-            plaintext.extend_from_slice(tmp.as_ref());
-        }
-
+        let start = out.len();
+        record.payload.copy_to_vec(out);
+        out.extend_from_slice(&record.typ.to_array());
         // sm4_encrypt_ccm 返回 ciphertext+tag 合并的 Vec
-        let combined = sm4_encrypt_ccm(&self.key, &nonce, &aad, &plaintext, 16)
+        let combined = sm4_encrypt_ccm(&self.key, &nonce, &aad, &out[start..], 16)
             .map_err(|_| Error::EncryptError)?;
-
-        let mut out = OutboundOpaque::with_capacity(combined.len());
+        out.truncate(start);
         out.extend_from_slice(&combined);
-
-        Ok(EncodedMessage {
-            typ: ContentType::ApplicationData,
-            version: ProtocolVersion::TLSv1_2,
-            payload: out,
-        })
+        Ok(())
     }
 
     fn encrypted_payload_len(&self, payload_len: usize) -> usize {
@@ -236,28 +227,30 @@ struct Sm4CcmDecrypter {
     iv: Iv,
 }
 
-impl MessageDecrypter for Sm4CcmDecrypter {
+impl RecordDecrypter for Sm4CcmDecrypter {
     fn decrypt<'a>(
         &mut self,
-        mut msg: EncodedMessage<InboundOpaque<'a>>,
+        mut record: Record<InboundOpaque<'a>>,
         seq: u64,
-    ) -> Result<EncodedMessage<&'a [u8]>, Error> {
-        let payload = &mut msg.payload;
-        if payload.len() < 16 {
-            return Err(Error::DecryptError);
+    ) -> Result<Record<&'a [u8]>, Error> {
+        {
+            let payload = &mut record.payload;
+            if payload.len() < 16 {
+                return Err(Error::DecryptError);
+            }
+
+            let nonce = Nonce::new(&self.iv, seq).to_array::<NONCE_LEN>()?;
+            let aad = make_tls13_aad(record.typ, record.version.version(), payload.len());
+
+            // sm4_decrypt_ccm 接收 ciphertext_with_tag（末尾 tag_len 字节为 tag）
+            let plaintext = sm4_decrypt_ccm(&self.key, &nonce, &aad, &payload[..], 16)
+                .map_err(|_| Error::DecryptError)?;
+
+            let plain_len = plaintext.len();
+            payload[..plain_len].copy_from_slice(&plaintext);
+            payload.truncate(plain_len);
         }
-
-        let nonce = Nonce::new(&self.iv, seq).to_array::<NONCE_LEN>()?;
-        let aad = make_tls13_aad(payload.len());
-
-        // sm4_decrypt_ccm 接收 ciphertext_with_tag（末尾 tag_len 字节为 tag）
-        let plaintext = sm4_decrypt_ccm(&self.key, &nonce, &aad, &payload[..], 16)
-            .map_err(|_| Error::DecryptError)?;
-
-        let plain_len = plaintext.len();
-        payload[..plain_len].copy_from_slice(&plaintext);
-        payload.truncate(plain_len);
-        msg.into_tls13_unpadded_message()
+        record.into_tls13_unpadded_record()
     }
 }
 

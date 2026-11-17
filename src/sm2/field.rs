@@ -3,13 +3,13 @@
 //! 曲线参数来自 GB/T 32918.1-2016 附录 A。
 //! 所有算术通过 `crypto-bigint` 的 `ConstMontyForm` 实现，常量时间。
 
-use crypto_bigint::{impl_modulus, modular::ConstMontyForm, U256};
+use crypto_bigint::{const_monty_params, modular::ConstMontyForm, U256};
 
 // ── 模数定义 ──────────────────────────────────────────────────────────────────
 
 // SM2 素数域模数 p
 // p = FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFF
-impl_modulus!(
+const_monty_params!(
     Sm2FieldModulus,
     U256,
     "FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFF"
@@ -17,7 +17,7 @@ impl_modulus!(
 
 // SM2 群阶 n
 // n = FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54123
-impl_modulus!(
+const_monty_params!(
     Sm2GroupOrder,
     U256,
     "FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54123"
@@ -74,7 +74,7 @@ pub fn fp_from_bytes(bytes: &[u8; 32]) -> Fp {
 /// 将 Fp 元素转为大端字节
 #[inline]
 pub fn fp_to_bytes(a: &Fp) -> [u8; 32] {
-    a.retrieve().to_be_bytes()
+    a.retrieve().to_be_bytes().into()
 }
 
 /// 从大端字节构造 Fn（标量，调用方保证值 < n）
@@ -86,7 +86,7 @@ pub fn fn_from_bytes(bytes: &[u8; 32]) -> Fn {
 /// 将 Fn 元素转为大端字节
 #[inline]
 pub fn fn_to_bytes(a: &Fn) -> [u8; 32] {
-    a.retrieve().to_be_bytes()
+    a.retrieve().to_be_bytes().into()
 }
 
 /// Fp 加法（模 p）
@@ -122,7 +122,7 @@ pub fn fp_square(a: &Fp) -> Fp {
 /// Fp 求逆（Bernstein-Yang 算法，常量时间）
 /// 返回 None 当且仅当 a == 0
 pub fn fp_inv(a: &Fp) -> Option<Fp> {
-    let inv = a.inv();
+    let inv = a.invert();
     // CtOption 转换为 Option
     if bool::from(inv.is_some()) {
         // Reason: ConstantTimeEq 保证此 unwrap 不可能 panic（is_some 为真）
@@ -178,7 +178,7 @@ pub fn fn_neg(a: &Fn) -> Fn {
 /// Fn 求逆（Bernstein-Yang 算法，常量时间）
 /// 返回 None 当且仅当 a == 0
 pub fn fn_inv(a: &Fn) -> Option<Fn> {
-    let inv = a.inv();
+    let inv = a.invert();
     if bool::from(inv.is_some()) {
         Some(inv.unwrap())
     } else {

@@ -259,7 +259,7 @@ impl G2Jacobian {
         let addend = *p;
         let mut started = false;
 
-        for byte in &k.to_be_bytes() {
+        for byte in k.to_be_bytes().iter() {
             for bit in (0..8).rev() {
                 if started {
                     result = result.double();
@@ -310,7 +310,7 @@ impl G2Affine {
         let y1: [u8; 32] = bytes[96..128].try_into().unwrap();
 
         use crate::sm9::fields::fp::FIELD_MODULUS;
-        use crypto_bigint::subtle::ConstantTimeGreater;
+        use crypto_bigint::CtGt;
 
         for b in [&x0, &x1, &y0, &y1] {
             let v = U256::from_be_slice(b);

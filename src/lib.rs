@@ -51,6 +51,15 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+/// 把 `subtle::Choice` 转成 crypto-bigint 0.7 常量时间 trait 用的 `Choice`。
+///
+/// Reason: 0.7 起 `ct_select`/`ct_gt`/`ct_lt` 改用 ctutils 的 `Choice`，
+///   与本项目其余部分使用的 `subtle` 不是同一个类型。
+#[inline]
+pub(crate) fn subtle_choice(choice: subtle::Choice) -> crypto_bigint::Choice {
+    crypto_bigint::Choice::from_u8_lsb(choice.unwrap_u8())
+}
+
 pub mod error;
 pub mod sm2;
 pub mod sm3;
