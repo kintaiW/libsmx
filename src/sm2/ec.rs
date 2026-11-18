@@ -3,10 +3,11 @@
 //! 使用 Jacobian 射影坐标（X:Y:Z），仿射坐标满足 x = X/Z², y = Y/Z³。
 //! 避免热路径中的 Fp 求逆运算，性能优于仿射坐标加法。
 
-use crypto_bigint::U256;
+use crypto_bigint::{CtSelect, U256};
 use subtle::{Choice, ConditionallySelectable};
 
 use crate::error::Error;
+use crate::subtle_choice;
 use crate::sm2::field::{
     fp_add, fp_from_bytes, fp_inv, fp_mul, fp_neg, fp_square, fp_sub, fp_to_bytes, Fp, CURVE_A,
     CURVE_B, FIELD_MODULUS, GX, GY,
@@ -43,9 +44,9 @@ pub struct JacobianPoint {
 impl ConditionallySelectable for JacobianPoint {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         JacobianPoint {
-            x: Fp::conditional_select(&a.x, &b.x, choice),
-            y: Fp::conditional_select(&a.y, &b.y, choice),
-            z: Fp::conditional_select(&a.z, &b.z, choice),
+            x: a.x.ct_select(&b.x, subtle_choice(choice)),
+            y: a.y.ct_select(&b.y, subtle_choice(choice)),
+            z: a.z.ct_select(&b.z, subtle_choice(choice)),
         }
     }
 }
@@ -214,7 +215,7 @@ impl JacobianPoint {
         let mut result = JacobianPoint::INFINITY;
 
         // 固定 256 次迭代，不跳过前导零
-        for byte in &k.to_be_bytes() {
+        for byte in k.to_be_bytes().iter() {
             for b in (0..8).rev() {
                 // 始终执行倍点（与标量位无关）
                 result = result.double();
@@ -333,7 +334,7 @@ fn scalar_mul_g_window(k: &U256) -> JacobianPoint {
     }
 
     let mut result = JacobianPoint::INFINITY;
-    for byte in &k.to_be_bytes() {
+    for byte in k.to_be_bytes().iter() {
         // ── 高 4 位窗口 ─────────────────────────────────────────────────────
         for _ in 0..4 {
             result = result.double();
@@ -391,7 +392,7 @@ impl AffinePoint {
         let y_bytes: [u8; 32] = bytes[33..65].try_into().unwrap();
 
         // 检查坐标在 [0, p-1] 范围内
-        use crypto_bigint::subtle::ConstantTimeGreater;
+        use crypto_bigint::CtGt;
         let x_val = U256::from_be_slice(&x_bytes);
         let y_val = U256::from_be_slice(&y_bytes);
         if bool::from(x_val.ct_gt(&FIELD_MODULUS))
@@ -431,7 +432,7 @@ impl AffinePoint {
         }
         let x_bytes: [u8; 32] = bytes[1..33].try_into().unwrap();
 
-        use crypto_bigint::subtle::ConstantTimeGreater;
+        use crypto_bigint::CtGt;
         let x_val = U256::from_be_slice(&x_bytes);
         if bool::from(x_val.ct_gt(&FIELD_MODULUS)) || x_val == FIELD_MODULUS {
             return Err(Error::InvalidPublicKey);

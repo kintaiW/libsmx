@@ -5,7 +5,7 @@
 [![docs.rs](https://img.shields.io/docsrs/libsmx)](https://docs.rs/libsmx)
 [![codecov](https://codecov.io/gh/kintaiW/libsmx/graph/badge.svg)](https://codecov.io/gh/kintaiW/libsmx)
 [![License](https://img.shields.io/crates/l/libsmx.svg)](LICENSE)
-[![MSRV](https://img.shields.io/badge/MSRV-1.83.0-blue.svg)](https://blog.rust-lang.org/2024/11/28/Rust-1.83.0.html)
+[![MSRV](https://img.shields.io/badge/MSRV-1.87.0-blue.svg)](https://doc.rust-lang.org/stable/releases.html)
 
 纯 Rust、`#![no_std]` 实现的中国商用密码算法库，全程常量时间操作。
 
@@ -22,7 +22,7 @@
 
 - **`#![no_std]`** — 支持嵌入式、WASM 及裸机环境
 - **`#![forbid(unsafe_code)]`** — 零 `unsafe` 块
-- **常量时间** — 所有涉密操作均使用 [`subtle`](https://docs.rs/subtle) 原语，防时序侧信道
+- **常量时间** — 所有涉密操作均使用常量时间原语（[`subtle`](https://docs.rs/subtle) / [`ctutils`](https://docs.rs/ctutils)），防时序侧信道
 - **自动清零** — 私钥离开作用域后经由 [`zeroize`](https://docs.rs/zeroize) 自动清零
 - **SM4 S 盒抗侧信道** — 布尔电路位切片实现，无任何内存表查询，免疫缓存时序攻击
 - **SM2 完备加法公式** — 点加法使用无分支完备公式，杜绝特殊情况侧信道
@@ -183,6 +183,7 @@ assert_eq!(decrypted, plaintext);
 |---------|----------|------|
 | `alloc` | 是 | 启用返回 `Vec` 的 API（SM2/SM9 加解密、SM4 各模式） |
 | `std`   | 否 | 启用 `std::error::Error` trait 实现及 `rand_core/std` 重导出 |
+| `rustls-provider` | 否 | 启用 rustls `CryptoProvider`，提供 RFC 8998 国密 TLS 1.3 套件（固定 rustls rev） |
 
 在无 `alloc` 的 `no_std` 环境中使用：
 
@@ -248,7 +249,7 @@ cargo bench
 
 ## 最低支持 Rust 版本（MSRV）
 
-最低支持版本为 **Rust 1.83.0**。MSRV 提升视为次版本号变更。
+最低支持版本为 **Rust 1.87.0**（由 `crypto-bigint 0.7` 决定）。MSRV 提升视为次版本号变更。
 
 ## 许可证
 

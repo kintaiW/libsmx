@@ -25,8 +25,9 @@ impl crypto::hash::Hash for Sm3Hash {
     }
 
     fn algorithm(&self) -> HashAlgorithm {
-        // Reason: SM3 尚无 IANA TLS HashAlgorithm 标准编号，暂用 Unknown(0x07)
-        HashAlgorithm::Unknown(0x07)
+        // Reason: SM3 尚无 IANA TLS HashAlgorithm 标准编号，暂用 0x07；
+        //   新版 rustls 用 enum_builder 生成的结构体，未知值直接构造。
+        HashAlgorithm(0x07)
     }
 }
 

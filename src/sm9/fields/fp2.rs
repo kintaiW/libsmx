@@ -5,16 +5,19 @@
 //!
 //! 元素表示为 a = a0 + a1·u，其中 a0, a1 ∈ Fp
 
+use crypto_bigint::CtSelect;
+
 use crate::sm9::fields::fp::{
     fp_add, fp_from_bytes, fp_inv, fp_mul, fp_neg, fp_square, fp_sub, fp_to_bytes, Fp,
 };
+use crate::subtle_choice;
 use subtle::{Choice, ConditionallySelectable};
 
 impl ConditionallySelectable for Fp2 {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         Fp2 {
-            c0: Fp::conditional_select(&a.c0, &b.c0, choice),
-            c1: Fp::conditional_select(&a.c1, &b.c1, choice),
+            c0: a.c0.ct_select(&b.c0, subtle_choice(choice)),
+            c1: a.c1.ct_select(&b.c1, subtle_choice(choice)),
         }
     }
 }

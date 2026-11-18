@@ -12,7 +12,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-use crypto_bigint::{Zero, U256};
+use crypto_bigint::U256;
 use rand_core::RngCore;
 
 use crate::error::Error;

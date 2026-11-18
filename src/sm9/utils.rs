@@ -72,11 +72,11 @@ fn hash_to_range(z: &[u8], hid: u8, n: &U256) -> U256 {
     // h = h_raw mod (n-1) + 1，确保 h ∈ [1, n-1]
     // Reason: 原 while 循环的执行次数取决于 h_raw 是否 ≥ n-1，泄露 1 bit 信息。
     //   改用无条件减法 + 掩码选择（conditional_select），执行时间与 h_raw 值无关。
-    //   crypto_bigint::Uint 实现了 subtle::ConstantTimeLess，ct_lt 为常量时间比较。
-    use subtle::{ConditionallySelectable, ConstantTimeLess};
+    //   crypto_bigint::Uint 实现了 crypto_bigint::CtLt，ct_lt 为常量时间比较。
+    use crypto_bigint::{CtLt, CtSelect};
     let need_reduce = !h_raw.ct_lt(&n_minus_1); // h_raw >= n_minus_1
     let reduced = h_raw.wrapping_sub(&n_minus_1);
-    let h = U256::conditional_select(&h_raw, &reduced, need_reduce);
+    let h = h_raw.ct_select(&reduced, need_reduce);
     h.wrapping_add(&U256::ONE)
 }
 
@@ -129,7 +129,6 @@ pub fn fp12_to_bytes_for_kdf(w: &crate::sm9::fields::fp12::Fp12) -> [u8; 384] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crypto_bigint::Zero;
 
     #[test]
     fn test_sm9_h1_nonzero() {

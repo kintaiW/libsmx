@@ -5,7 +5,7 @@
 [![docs.rs](https://img.shields.io/docsrs/libsmx)](https://docs.rs/libsmx)
 [![codecov](https://codecov.io/gh/kintaiW/libsmx/graph/badge.svg)](https://codecov.io/gh/kintaiW/libsmx)
 [![License](https://img.shields.io/crates/l/libsmx.svg)](LICENSE)
-[![MSRV](https://img.shields.io/badge/MSRV-1.83.0-blue.svg)](https://blog.rust-lang.org/2024/11/28/Rust-1.83.0.html)
+[![MSRV](https://img.shields.io/badge/MSRV-1.87.0-blue.svg)](https://doc.rust-lang.org/stable/releases.html)
 
 Pure-Rust, `#![no_std]` implementation of Chinese commercial cryptography standards (国密/GuoMi) with constant-time operations throughout. Designed for embedded systems, WASM, and production use.
 
@@ -24,7 +24,7 @@ Pure-Rust, `#![no_std]` implementation of Chinese commercial cryptography standa
 
 - **`#![no_std]`** — works in embedded, WASM, and bare-metal environments
 - **`#![forbid(unsafe_code)]`** — zero `unsafe` blocks
-- **Constant-time** — all secret-dependent operations use [`subtle`](https://docs.rs/subtle) primitives
+- **Constant-time** — all secret-dependent operations use constant-time primitives ([`subtle`](https://docs.rs/subtle) / [`ctutils`](https://docs.rs/ctutils))
 - **Auto-zeroize** — private keys cleared on drop via [`zeroize`](https://docs.rs/zeroize)
 - **Side-channel resistant SM4 S-box** — boolean circuit bitslice (no table lookup)
 - **Complete EC formulas** — SM2 point addition uses branch-free complete formulas
@@ -153,7 +153,7 @@ sm9_verify(msg, &h, &s, user_id, &sign_pub).unwrap();
 |---------|---------|-------------|
 | `alloc` | Yes | Enables `Vec`-returning APIs (SM2/SM9 encrypt/decrypt, SM4 modes) |
 | `std` | No | Enables `std::error::Error` impl and re-exports `rand_core/std` |
-| `rustls-provider` | No | Enables rustls `CryptoProvider` with RFC 8998 ShangMi TLS 1.3 cipher suites |
+| `rustls-provider` | No | Enables rustls `CryptoProvider` with RFC 8998 ShangMi TLS 1.3 cipher suites (pinned rustls rev) |
 
 For `no_std` without `alloc`:
 
@@ -229,7 +229,7 @@ For **security vulnerabilities**, please do **not** open public issues. Instead,
 
 ## MSRV Policy
 
-The minimum supported Rust version is **1.83.0**. MSRV bumps are treated as minor version changes.
+The minimum supported Rust version is **1.87.0** (required by `crypto-bigint 0.7`). MSRV bumps are treated as minor version changes.
 
 ## License
 

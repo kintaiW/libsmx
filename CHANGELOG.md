@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Upgraded `crypto-bigint` from 0.6 to 0.7 (RUSTSEC-2026-0387); MSRV raised to **1.87.0** as required by `crypto-bigint 0.7`
+- `rustls-provider`: pinned the rustls git revision and migrated to its new record-layer API; integration tests use the external-buffer connection API
+- Lockfile: `crossbeam-epoch` 0.9.20, `rand` 0.8.6 / 0.9.3, `spin` 0.9.9; dev-only `paste` 1.0.15 remains (RUSTSEC-2024-0436, no fixed version)
+- Raised dependency floors to the patched releases: `rand_core` >= 0.6.2 (RUSTSEC-2021-0023, see issue #2) and `rand` >= 0.8.6
+
 ## [0.3.0] - 2025-03-09
 
 ### Added
